@@ -3,204 +3,133 @@ SPDX-FileCopyrightText: 2026 shadPS4 Emulator Project
 SPDX-License-Identifier: GPL-2.0-or-later
 -->
 
-<h1 align="center">
-  <br>
-  <a href="https://shadps4.net/"><img src="https://github.com/shadps4-emu/shadPS4/blob/main/.github/shadps4.png" width="220"></a>
-  <br>
-  <b>shadPS4</b>
-  <br>
-</h1>
+# shadPS4 iOS and iPadOS Port
 
-<h1 align="center">
- <a href="https://discord.gg/bFJxfftGW6">
-        <img src="https://img.shields.io/discord/1080089157554155590?color=5865F2&label=shadPS4%20Discord&logo=Discord&logoColor=white" width="275">
- <a href="https://github.com/shadps4-emu/shadPS4/releases/latest">
-        <img src="https://img.shields.io/github/downloads/shadps4-emu/shadPS4/total.svg" width="140">
- <a href="https://shadps4.net/">
-        <img src="https://img.shields.io/badge/shadPS4-website-8A2BE2" width="150">
- <a href="https://x.com/shadps4">
-        <img src="https://img.shields.io/badge/-Join%20us-black?logo=X&logoColor=white" width="100">
- <a href="https://github.com/shadps4-emu/shadPS4/stargazers">
-        <img src="https://img.shields.io/github/stars/shadps4-emu/shadPS4" width="120">
-</h1>
+This repository is an experimental iOS and iPadOS port branch of
+[shadPS4](https://github.com/shadps4-emu/shadPS4), an early PlayStation 4
+emulator written in C++.
 
-|               Bloodborne by From Software                   |                     Hatsune Miku Project DIVA Future Tone by SEGA                         |
-| :-----------------------------------------------------------: | :--------------------------------------------------------------------------------------------: |
-| ![Bloodborne screenshot](./documents/Screenshots/1.png) | ![Project DIVA screenshot](./documents/Screenshots/2.png) |
-
-|                  Yakuza 0 by SEGA                     |                 DRIVECLUB™ by Evolution Studios                    |
-| :------------------------------------------------------------------------: | :------------------------------------------------------------------: |
-| ![Yakuza screenshot](./documents/Screenshots/3.png) | ![DRIVECLUB screenshot](./documents/Screenshots/4.png) |
-
-# General information
-
-**shadPS4** is an early **PlayStation 4** emulator for **Windows**, **Linux** and **macOS** written in C++.
+The goal of this fork is to explore a mobile Apple Silicon path for shadPS4,
+starting with iPadOS devices powerful enough to make testing realistic.
 
 > [!IMPORTANT]
-> This is the emulator core, which does not include a GUI. If you just want to use the emulator as an end user, download the [**QtLauncher**](https://github.com/shadps4-emu/shadps4-qtlauncher/releases) instead.
+> This is not a finished iOS app yet. The current work is port scaffolding:
+> device policy, resolution limits, external JIT readiness hooks, and build
+> configuration for future iOS/iPadOS targets.
 
-If you encounter problems or have doubts, do not hesitate to look at the [**Quickstart**](https://github.com/shadps4-emu/shadPS4/wiki/I.-Quick-start-%5BUsers%5D).\
-To verify that a game works, you can look at [**shadPS4 Game Compatibility**](https://github.com/shadps4-compatibility/shadps4-game-compatibility).\
-To discuss shadPS4 development, suggest ideas or to ask for help, join our [**Discord server**](https://discord.gg/bFJxfftGW6).\
-To get the latest news, go to our [**X (Twitter)**](https://x.com/shadps4) or our [**website**](https://shadps4.net/).\
-You can donate to the project via our [**Kofi page**](https://ko-fi.com/shadps4).
+## Current Target
 
-# Status
+The first test device for this branch is:
 
-> [!IMPORTANT]
-> shadPS4 is early in development, don't expect a flawless experience.
+- iPad Air M3
+- `iPad15,3` to `iPad15,6`
+- iOS/iPadOS 18.0 or newer
 
-Currently, the emulator can successfully run games like [**Bloodborne**](https://www.youtube.com/watch?v=5sZgWyVflFM), [**Dark Souls Remastered**](https://www.youtube.com/watch?v=-3PA-Xwszts), [**Red Dead Redemption**](https://www.youtube.com/watch?v=Al7yz_5nLag), and many other games.
+Runtime policy currently requires:
 
-# Why
+- iOS/iPadOS 18.0 or newer
+- iPhone/iOS device with at least 6 GB RAM
+- 8 GB RAM recommended
+- iPadOS device must be M1 or newer
+- iPad Air M3 is explicitly accepted for testing
+- Rendering presets are limited to `1280x720` and `1600x900`
 
-This project began for fun. Given our limited free time, it may take some time before shadPS4 can run more complex games, but we're committed to making small, regular updates.
+## JIT Strategy
 
-# Building
+iOS and iPadOS do not provide a normal desktop-style JIT environment for apps.
+This fork therefore does not assume that the emulator itself owns a JIT
+entitlement.
 
-## Docker
+Instead, the branch adds an external JIT bridge in:
 
-For building shadPS4 in a containerized environment using Docker and VSCode, check the instructions here:  
-[**Docker Build Instructions**](https://github.com/shadps4-emu/shadPS4/blob/main/documents/building-docker.md)
+- `src/core/jit/external_jit_bridge.h`
+- `src/core/jit/external_jit_bridge.cpp`
 
-## Windows
+An external sideload/debug workflow can provide these weak hooks:
 
-Check the build instructions for [**Windows**](https://github.com/shadps4-emu/shadPS4/blob/main/documents/building-windows.md).
-
-## Linux
-
-Check the build instructions for [**Linux**](https://github.com/shadps4-emu/shadPS4/blob/main/documents/building-linux.md).
-
-## macOS
-
-Check the build instructions for [**macOS**](https://github.com/shadps4-emu/shadPS4/blob/main/documents/building-macos.md).
-
-> [!IMPORTANT]
-> macOS users need at least macOS 15.4 to run shadPS4. Due to GPU issues there are currently heavy bugs on Intel Macs.
-
-# Usage examples
-
-> [!IMPORTANT]
-> For a user-friendly GUI, download the [**QtLauncher**](https://github.com/shadps4-emu/shadps4-qtlauncher/releases).
-
-To get the list of all available commands and also a more detailed description of what each command does, please refer to the `--help` flag's output.
-
-Below is a list of commonly used command patterns:
-```sh
-shadPS4 CUSA00001 # Searches for a game folder called CUSA00001 in the list of game install folders, and boots it.
-shadPS4 --fullscreen true --config-clean CUSA00001    # the game argument is always the last one,
-shadPS4 -g CUSA00001 --fullscreen true --config-clean # ...unless manually specified otherwise.
-shadPS4 /path/to/game.elf # Boots a PS4 ELF file directly. Useful if you want to boot an executable that is not named eboot.bin.
-shadPS4 CUSA00001 -- -flag1 -flag2 # Passes '-flag1' and '-flag2' to the game executable in argv.
+```c
+bool shadps4_external_jit_is_ready(void);
+bool shadps4_external_jit_prepare_process(void);
 ```
 
-# Debugging and reporting issues
+Desktop tests can also set:
 
-For more information on how to test, debug and report issues with the emulator or games, read the [**Debugging documentation**](https://github.com/shadps4-emu/shadPS4/blob/main/documents/Debugging/Debugging.md).
+```sh
+SHADPS4_EXTERNAL_JIT_READY=1
+```
 
-# Keyboard and Mouse Mappings
+This only reports readiness. It does not bypass iOS code-signing rules by
+itself.
 
-> [!NOTE]
-> Some keyboards may also require you to hold the Fn key to use the F\* keys. Mac users should use the Command key instead of Control, and need to use Command+F11 for full screen to avoid conflicting with system key bindings.
+## Build Notes
 
-| Button | Function |
-|-------------|-------------|
-F10 | FPS Counter
-Ctrl+F10 | Video Debug Info
-F11 | Fullscreen
-F12 | Trigger RenderDoc Capture (or game-only screenshot if RenderDoc is unavailable)
-Alt+F12 | Capture screenshot including HUD/dialog overlays
+You need full Xcode with the iPhoneOS SDK installed. Apple Command Line Tools
+alone are not enough.
 
-> [!NOTE]
-> Xbox and DualShock controllers work out of the box.
+Example configure command:
 
-| Controller button | Keyboard equivalent |
-|-------------|-------------|
-LEFT AXIS UP | W |
-LEFT AXIS DOWN | S |
-LEFT AXIS LEFT | A |
-LEFT AXIS RIGHT | D |
-RIGHT AXIS UP | I |
-RIGHT AXIS DOWN | K |
-RIGHT AXIS LEFT | J |
-RIGHT AXIS RIGHT | L |
-TRIANGLE | Numpad 8 or C |
-CIRCLE | Numpad 6 or B |
-CROSS | Numpad 2 or N |
-SQUARE | Numpad 4 or V |
-PAD UP | UP |
-PAD DOWN | DOWN |
-PAD LEFT | LEFT |
-PAD RIGHT | RIGHT |
-OPTIONS | RETURN |
-BACK BUTTON / TOUCH PAD | SPACE |
-L1 | Q |
-R1 | U |
-L2 | E |
-R2 | O |
-L3 | X |
-R3 | M |
+```sh
+cmake -S . -B build/ios-device \
+  -DCMAKE_SYSTEM_NAME=iOS \
+  -DCMAKE_OSX_SYSROOT=iphoneos \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=18.0 \
+  -DSHADPS4_IOS_PORT=ON \
+  -DSHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE=ON
+```
 
-Keyboard and mouse inputs can be customized in the settings menu by clicking the Controller button, and further details and help on controls are  also found there. Custom bindings are saved per-game. Inputs support up to three keys per binding, mouse buttons, mouse movement mapped to joystick input, and more.
+The normal desktop shadPS4 build path is inherited from upstream. See the
+original build documentation:
 
+- [Windows](https://github.com/shadps4-emu/shadPS4/blob/main/documents/building-windows.md)
+- [Linux](https://github.com/shadps4-emu/shadPS4/blob/main/documents/building-linux.md)
+- [macOS](https://github.com/shadps4-emu/shadPS4/blob/main/documents/building-macos.md)
 
-# Firmware files
+## Port Status
 
-shadPS4 can load some PlayStation 4 firmware files.
-The following firmware modules are supported and must be placed in shadPS4's `sys_modules` folder.
+Implemented in this branch:
 
-<div align="center">
+- iOS/iPadOS CMake scaffolding
+- iOS deployment target set to 18.0
+- Device policy for RAM, iPad M-series support, and iPad Air M3
+- Resolution clamp to 720p or 900p
+- External JIT readiness bridge
+- SDL Metal surface path extended for iOS
+- Port notes in `docs/ios-ipados-port.md`
 
-| Modules                  | Modules                  | Modules                  | Modules                  |
-|--------------------------|--------------------------|--------------------------|--------------------------|
-| libSceAudiodec.sprx      | libSceCesCs.sprx         | libSceFont.sprx          | libSceFontFt.sprx        |
-| libSceFreeTypeOt.sprx    | libSceJpegDec.sprx       | libSceJpegEnc.sprx       | libSceJson.sprx          |
-| libSceJson2.sprx         | libSceLibcInternal.sprx  | libSceNgs2.sprx          | libScePngEnc.sprx        |
-| libSceRtc.sprx           | libSceSystemGesture.sprx | libSceUlt.sprx           |                          |
-</div>
+Still needed:
 
-> [!Caution]
-> The above modules are required to run the games properly and must be dumped from your legally owned PlayStation 4 console.
+- Native iOS app entry point
+- UIKit app lifecycle integration
+- File picker and sandbox storage flow
+- Controller and touch overlay work
+- ARM64 CPU backend integration
+- External JIT provider integration
+- MoltenVK packaging and on-device Vulkan presenter validation
 
+## Legal Files and Game Dumps
 
+This repository does not include PlayStation 4 firmware, system modules, games,
+keys, or copyrighted Sony content.
 
-# Main team
+Use only files dumped from hardware and games you legally own. Upstream shadPS4
+requires supported PS4 firmware modules to be placed in the emulator
+`sys_modules` folder when needed.
 
-- [**georgemoralis**](https://github.com/georgemoralis)
-- [**psucien**](https://github.com/psucien)
-- [**viniciuslrangel**](https://github.com/viniciuslrangel)
-- [**roamic**](https://github.com/roamic)
-- [**squidbus**](https://github.com/squidbus)
-- [**frodo**](https://github.com/baggins183)
-- [**Stephen Miller**](https://github.com/StevenMiller123)
-- [**kalaposfos13**](https://github.com/kalaposfos13)
+## Upstream Project
 
-Logo is done by [**Xphalnos**](https://github.com/Xphalnos)
+This fork is based on the official shadPS4 emulator:
 
-<a href="https://github.com/shadps4-emu/shadPS4/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=shadps4-emu/shadPS4&max=24">
-</a>
+- Website: [shadps4.net](https://shadps4.net/)
+- Upstream repository: [shadps4-emu/shadPS4](https://github.com/shadps4-emu/shadPS4)
+- Compatibility tracker: [shadps4-game-compatibility](https://github.com/shadps4-compatibility/shadps4-game-compatibility)
+- Discord: [shadPS4 Discord](https://discord.gg/bFJxfftGW6)
 
-# Contributing
+Please support and credit the upstream project. This fork exists to explore the
+iOS/iPadOS port path, not to replace upstream shadPS4.
 
-If you want to contribute, please read the [**CONTRIBUTING.md**](https://github.com/shadps4-emu/shadPS4/blob/main/CONTRIBUTING.md) file.\
-Open a PR and we'll check it :)
+## License
 
+This project follows upstream shadPS4 licensing:
 
-# Special Thanks
-
-A few noteworthy teams/projects who've helped us along the way are:
-
-- [**Panda3DS**](https://github.com/wheremyfoodat/Panda3DS): A multiplatform 3DS emulator from our co-author wheremyfoodat. They have been incredibly helpful in understanding and solving problems that came up from natively executing the x64 code of PS4 binaries
-
-- [**fpPS4**](https://github.com/red-prig/fpPS4): The fpPS4 team has assisted massively with understanding some of the more complex parts of the PS4 operating system and libraries, by helping with reverse engineering work and research.
-
-- **yuzu**: Our shader compiler has been designed with yuzu's Hades compiler as a blueprint. This allowed us to focus on the challenges of emulating a modern AMD GPU while having a high-quality optimizing shader compiler implementation as a base.
-
-- [**felix86**](https://github.com/OFFTKP/felix86): A new x86-64 → RISC-V Linux userspace emulator
-
-- [**emudev.org**](https://emudev.org/): A network of people interested in the documentation, emulation, simulation and re-implementation of hardware near extinction . Belongs to my friend skmp and me (shadow) also a member of it
-
-# License
-
-- [**GPL-2.0 license**](https://github.com/shadps4-emu/shadPS4/blob/main/LICENSE)
+- [GPL-2.0-or-later](LICENSE)
