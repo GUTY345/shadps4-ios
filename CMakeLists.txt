@@ -44,7 +44,7 @@ option(ENABLE_UPDATER "Enables the options to updater" ON)
 option(ENABLE_TESTS "Build unit tests (requires GTest)" OFF)
 option(SHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE "Enable the external JIT readiness bridge" ON)
 option(SHADPS4_IOS_BUILD_SMOKE_APP "Build the iOS/iPadOS smoke-test app instead of the desktop CLI" ON)
-option(SHADPS4_IOS_BUILD_BUNDLED_MOLTENVK "Build and link the bundled MoltenVK target for the iOS smoke app" OFF)
+option(SHADPS4_IOS_BUILD_BUNDLED_MOLTENVK "Build and link the bundled MoltenVK target for the iOS smoke app" ON)
 set(SHADPS4_IOS_MOLTENVK_XCFRAMEWORK "" CACHE PATH "Path to an iOS MoltenVK.xcframework")
 set(SHADPS4_IOS_MOLTENVK_FRAMEWORK "" CACHE PATH "Path to an iOS MoltenVK.framework")
 set(SHADPS4_IOS_MOLTENVK_DYLIB "" CACHE FILEPATH "Path to an iOS libMoltenVK.dylib")
@@ -242,6 +242,28 @@ endif()
 
 if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
     if(SHADPS4_IOS_BUILD_BUNDLED_MOLTENVK AND NOT TARGET MoltenVK)
+        find_program(SHADPS4_GIT_EXECUTABLE git)
+        if(SHADPS4_GIT_EXECUTABLE)
+            set(SHADPS4_IOS_MOLTENVK_CMAKE_PATCH
+                "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ios/moltenvk-ios-cmake.patch")
+            execute_process(
+                COMMAND "${SHADPS4_GIT_EXECUTABLE}" apply --check "${SHADPS4_IOS_MOLTENVK_CMAKE_PATCH}"
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/externals/MoltenVK"
+                RESULT_VARIABLE SHADPS4_IOS_MOLTENVK_PATCH_CHECK
+                OUTPUT_QUIET
+                ERROR_QUIET
+            )
+            if(SHADPS4_IOS_MOLTENVK_PATCH_CHECK EQUAL 0)
+                execute_process(
+                    COMMAND "${SHADPS4_GIT_EXECUTABLE}" apply "${SHADPS4_IOS_MOLTENVK_CMAKE_PATCH}"
+                    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/externals/MoltenVK"
+                    RESULT_VARIABLE SHADPS4_IOS_MOLTENVK_PATCH_APPLY
+                )
+                if(NOT SHADPS4_IOS_MOLTENVK_PATCH_APPLY EQUAL 0)
+                    message(FATAL_ERROR "Failed to apply iOS MoltenVK CMake patch")
+                endif()
+            endif()
+        endif()
         set(MVK_EXCLUDE_SPIRV_TOOLS ON CACHE BOOL "" FORCE)
         set(MVK_USE_METAL_PRIVATE_API ON CACHE BOOL "" FORCE)
         set(MVK_BUILD_SHADER_CONVERTER_TOOL OFF CACHE BOOL "" FORCE)
@@ -295,9 +317,6 @@ if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
     if(EXISTS "${IOS_MOLTENVK_ICD}")
         list(APPEND IOS_SMOKE_RESOURCES "${IOS_MOLTENVK_ICD}")
     endif()
-    if(IOS_MOLTENVK_RUNTIME_KIND STREQUAL "framework" OR IOS_MOLTENVK_RUNTIME_KIND STREQUAL "dylib")
-        list(APPEND IOS_SMOKE_RESOURCES "${IOS_MOLTENVK_RUNTIME}")
-    endif()
     set_source_files_properties(${IOS_SMOKE_RESOURCES}
         PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
     add_executable(shadps4-ios-smoke MACOSX_BUNDLE
@@ -315,6 +334,8 @@ if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
         src/core/emulator_state.h
         src/core/jit/arm64_dynarec_backend.cpp
         src/core/jit/arm64_dynarec_backend.h
+        src/core/jit/arm64_x64_translator.cpp
+        src/core/jit/arm64_x64_translator.h
         src/core/jit/external_jit_bridge.cpp
         src/core/jit/external_jit_bridge.h
         ${IOS_SMOKE_RESOURCES}
@@ -333,9 +354,13 @@ if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
     if(TARGET MoltenVK)
         target_compile_definitions(shadps4-ios-smoke PRIVATE SHADPS4_IOS_MOLTENVK_RUNTIME_LINKED=1)
         target_link_libraries(shadps4-ios-smoke PRIVATE MoltenVK)
+        set_property(TARGET shadps4-ios-smoke APPEND PROPERTY XCODE_EMBED_FRAMEWORKS MoltenVK)
     elseif(IOS_MOLTENVK_RUNTIME)
         target_compile_definitions(shadps4-ios-smoke PRIVATE SHADPS4_IOS_MOLTENVK_RUNTIME_LINKED=1)
         target_link_libraries(shadps4-ios-smoke PRIVATE "${IOS_MOLTENVK_RUNTIME}")
+        if(NOT IOS_MOLTENVK_RUNTIME_KIND STREQUAL "static")
+            set_property(TARGET shadps4-ios-smoke APPEND PROPERTY XCODE_EMBED_FRAMEWORKS "${IOS_MOLTENVK_RUNTIME}")
+        endif()
     endif()
     target_link_libraries(shadps4-ios-smoke PRIVATE
         "-framework CoreGraphics"
@@ -353,6 +378,8 @@ if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
         XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
         XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "18.0"
         XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
+        XCODE_EMBED_FRAMEWORKS_CODE_SIGN_ON_COPY YES
+        XCODE_EMBED_FRAMEWORKS_REMOVE_HEADERS_ON_COPY YES
     )
     return()
 endif()

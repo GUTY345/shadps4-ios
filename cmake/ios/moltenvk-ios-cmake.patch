@@ -1,0 +1,67 @@
+diff --git a/Common/CMakeLists.txt b/Common/CMakeLists.txt
+index 38873d9..78bfdbb 100644
+--- a/Common/CMakeLists.txt
++++ b/Common/CMakeLists.txt
+@@ -17,18 +17,32 @@ target_include_directories(MoltenVK_Common PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+ 
+ find_library(FOUNDATION_LIBRARY Foundation REQUIRED)
+ find_library(METAL_LIBRARY Metal REQUIRED)
+-find_library(APPKIT_LIBRARY AppKit REQUIRED)
+-find_library(IOKIT_LIBRARY IOKit REQUIRED)
+-find_library(IOSURFACE_LIBRARY IOSurface REQUIRED)
+ find_library(QUARTZCORE_LIBRARY QuartzCore REQUIRED)
+-target_link_libraries(MoltenVK_Common PUBLIC
+-	${FOUNDATION_LIBRARY}
+-	${METAL_LIBRARY}
+-	${APPKIT_LIBRARY}
+-	${IOKIT_LIBRARY}
+-	${IOSURFACE_LIBRARY}
+-	${QUARTZCORE_LIBRARY}
+-)
++find_library(COREGRAPHICS_LIBRARY CoreGraphics REQUIRED)
++find_library(IOSURFACE_LIBRARY IOSurface REQUIRED)
++if(CMAKE_SYSTEM_NAME STREQUAL "iOS" OR CMAKE_SYSTEM_NAME STREQUAL "tvOS" OR CMAKE_SYSTEM_NAME STREQUAL "visionOS")
++	find_library(UIKIT_LIBRARY UIKit REQUIRED)
++	target_link_libraries(MoltenVK_Common PUBLIC
++		${COREGRAPHICS_LIBRARY}
++		${FOUNDATION_LIBRARY}
++		${IOSURFACE_LIBRARY}
++		${METAL_LIBRARY}
++		${QUARTZCORE_LIBRARY}
++		${UIKIT_LIBRARY}
++	)
++else()
++	find_library(APPKIT_LIBRARY AppKit REQUIRED)
++	find_library(IOKIT_LIBRARY IOKit REQUIRED)
++	target_link_libraries(MoltenVK_Common PUBLIC
++		${COREGRAPHICS_LIBRARY}
++		${FOUNDATION_LIBRARY}
++		${METAL_LIBRARY}
++		${APPKIT_LIBRARY}
++		${IOKIT_LIBRARY}
++		${IOSURFACE_LIBRARY}
++		${QUARTZCORE_LIBRARY}
++	)
++endif()
+ 
+ ################################################################################
+ # Compiler options
+diff --git a/MoltenVK/CMakeLists.txt b/MoltenVK/CMakeLists.txt
+index 1296ce6..158c7ea 100644
+--- a/MoltenVK/CMakeLists.txt
++++ b/MoltenVK/CMakeLists.txt
+@@ -44,8 +44,12 @@ target_compile_definitions(MoltenVK PUBLIC
+ 	"MVK_FRAMEWORK_VERSION=${PROJECT_VERSION}"
+ )
+ 
+-set_target_properties(MoltenVK PROPERTIES VERSION ${PROJECT_VERSION})
+-set_target_properties(MoltenVK PROPERTIES SOVERSION ${PROJECT_VERSION_MAJOR})
++if(CMAKE_SYSTEM_NAME STREQUAL "iOS" OR CMAKE_SYSTEM_NAME STREQUAL "tvOS" OR CMAKE_SYSTEM_NAME STREQUAL "visionOS")
++	set_target_properties(MoltenVK PROPERTIES OUTPUT_NAME MoltenVK)
++else()
++	set_target_properties(MoltenVK PROPERTIES VERSION ${PROJECT_VERSION})
++	set_target_properties(MoltenVK PROPERTIES SOVERSION ${PROJECT_VERSION_MAJOR})
++endif()
+ 
+ ################################################################################
+ # Dependencies

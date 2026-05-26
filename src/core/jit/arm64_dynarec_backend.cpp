@@ -3,6 +3,8 @@
 
 #include "core/jit/arm64_dynarec_backend.h"
 
+#include "core/jit/arm64_x64_translator.h"
+
 #include <array>
 #include <cstddef>
 #include <cstring>
@@ -21,6 +23,7 @@ namespace Core::JIT::ARM64 {
 namespace {
 
 constexpr std::uint64_t ValidationValue = 0x345;
+bool g_translation_validation_passed = false;
 
 #if defined(__APPLE__) && (defined(__arm64__) || defined(__aarch64__))
 
@@ -66,18 +69,22 @@ private:
     std::size_t size_{};
 };
 
-bool EmitAndRunValidationStub(std::uint64_t* result) {
+bool EmitAndRunTranslatedValidationBlock(std::uint64_t* result) {
     if (result == nullptr) {
         return false;
     }
 
-    // movz x0, #0x345; ret
-    constexpr std::array<std::uint32_t, 2> code{
-        0xd28068a0U,
-        0xd65f03c0U,
+    // x86_64: mov eax, 0x345; ret
+    constexpr std::array<std::uint8_t, 6> x64_code{
+        0xb8U, 0x45U, 0x03U, 0x00U, 0x00U, 0xc3U,
     };
+    const auto translated = TranslateX64BasicBlockToArm64(x64_code);
+    if (!translated.success || translated.arm64_words.empty()) {
+        return false;
+    }
 
-    ExecutablePage page{code.size() * sizeof(std::uint32_t)};
+    const auto code_size = translated.arm64_words.size() * sizeof(std::uint32_t);
+    ExecutablePage page{code_size};
     if (!page.IsValid()) {
         return false;
     }
@@ -88,8 +95,8 @@ bool EmitAndRunValidationStub(std::uint64_t* result) {
     if (jit_write_protect != nullptr) {
         jit_write_protect(0);
     }
-    std::memcpy(page.Data(), code.data(), code.size() * sizeof(std::uint32_t));
-    sys_icache_invalidate(page.Data(), code.size() * sizeof(std::uint32_t));
+    std::memcpy(page.Data(), translated.arm64_words.data(), code_size);
+    sys_icache_invalidate(page.Data(), code_size);
     if (jit_write_protect != nullptr) {
         jit_write_protect(1);
     }
@@ -115,8 +122,8 @@ BackendStatus MakeBaseStatus(bool external_jit_available) {
 #endif
         .backend_linked = true,
         .executable_memory_ready = external_jit_available,
-        .validation_stub_ran = false,
-        .guest_translator_ready = false,
+        .validation_stub_ran = g_translation_validation_passed,
+        .guest_translator_ready = g_translation_validation_passed,
         .validation_result = 0,
     };
 
@@ -132,9 +139,15 @@ BackendStatus MakeBaseStatus(bool external_jit_available) {
         return status;
     }
 
-    status.summary = "ARM64 dynarec backend is linked and SideStore JIT is available.";
-    status.blocker =
-        "Validation codegen is available; the full PS4 x86_64 instruction translator is still being built.";
+    if (g_translation_validation_passed) {
+        status.summary = "ARM64 x86_64-to-ARM64 translator pipeline executed successfully.";
+        status.blocker =
+            "Translator bootstrap is live; more x86_64 opcodes and Core::Emulator::Run integration are next.";
+    } else {
+        status.summary = "ARM64 dynarec backend is linked and SideStore JIT is available.";
+        status.blocker =
+            "Translator backend is linked; run preparation to translate and execute the validation block.";
+    }
     return status;
 }
 
@@ -152,16 +165,20 @@ BackendStatus PrepareBackend(bool external_jit_available) {
 
 #if defined(__APPLE__) && (defined(__arm64__) || defined(__aarch64__))
     std::uint64_t result = 0;
-    status.validation_stub_ran = EmitAndRunValidationStub(&result);
+    status.validation_stub_ran = EmitAndRunTranslatedValidationBlock(&result);
     status.validation_result = result;
     if (status.validation_stub_ran) {
-        status.summary = "ARM64 dynarec validation stub executed successfully.";
+        g_translation_validation_passed = true;
+        status.guest_translator_ready = true;
+        status.summary = "ARM64 dynarec translated and executed an x86_64 validation block.";
         status.blocker =
-            "The executable ARM64 code path works; next step is translating PS4 x86_64 basic blocks.";
+            "Translator bootstrap is ready; extend opcode coverage and connect it to PS4 basic blocks.";
     } else {
-        status.summary = "ARM64 dynarec validation stub could not execute.";
+        g_translation_validation_passed = false;
+        status.guest_translator_ready = false;
+        status.summary = "ARM64 dynarec translator validation could not execute.";
         status.blocker =
-            "SideStore JIT is reported ready, but executable page allocation or code execution failed.";
+            "SideStore JIT is reported ready, but x86_64-to-ARM64 translation or code execution failed.";
     }
 #else
     status.summary = "ARM64 dynarec validation is not available on this platform.";
