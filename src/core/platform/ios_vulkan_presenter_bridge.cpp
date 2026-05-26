@@ -41,6 +41,10 @@ std::string GetExecutableBundleDir() {
 }
 
 VkGetInstanceProcAddrFn LoadVkGetInstanceProcAddr() {
+#if defined(SHADPS4_IOS_MOLTENVK_RUNTIME_LINKED)
+    return &vkGetInstanceProcAddr;
+#endif
+
     if (auto* symbol = dlsym(RTLD_DEFAULT, "vkGetInstanceProcAddr"); symbol != nullptr) {
         return reinterpret_cast<VkGetInstanceProcAddrFn>(symbol);
     }
@@ -141,7 +145,6 @@ VulkanPresenterBridgeStatus ProbeVulkanMetalSurface(const Frontend::WindowSystem
     const char* extensions[] = {
         VK_KHR_SURFACE_EXTENSION_NAME,
         VK_EXT_METAL_SURFACE_EXTENSION_NAME,
-        VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
     };
     const VkApplicationInfo app_info{
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -153,9 +156,8 @@ VulkanPresenterBridgeStatus ProbeVulkanMetalSurface(const Frontend::WindowSystem
     };
     const VkInstanceCreateInfo instance_info{
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
         .pApplicationInfo = &app_info,
-        .enabledExtensionCount = 3,
+        .enabledExtensionCount = 2,
         .ppEnabledExtensionNames = extensions,
     };
 

@@ -47,10 +47,23 @@ index 38873d9..78bfdbb 100644
  ################################################################################
  # Compiler options
 diff --git a/MoltenVK/CMakeLists.txt b/MoltenVK/CMakeLists.txt
-index 1296ce6..158c7ea 100644
+index 1296ce6..6c64bfb 100644
 --- a/MoltenVK/CMakeLists.txt
 +++ b/MoltenVK/CMakeLists.txt
-@@ -44,8 +44,12 @@ target_compile_definitions(MoltenVK PUBLIC
+@@ -5,8 +5,12 @@
+ # easier to maintain in conjunction with the Xcode project file.
+ file(GLOB_RECURSE SOURCES "MoltenVK/*.c" "MoltenVK/*.cpp" "MoltenVK/*.m" "MoltenVK/*.mm")
+ 
+-add_library(MoltenVK SHARED ${SOURCES})
++if(CMAKE_SYSTEM_NAME STREQUAL "iOS" OR CMAKE_SYSTEM_NAME STREQUAL "tvOS" OR CMAKE_SYSTEM_NAME STREQUAL "visionOS")
++	add_library(MoltenVK STATIC ${SOURCES})
++else()
++	add_library(MoltenVK SHARED ${SOURCES})
++endif()
+ add_library(MoltenVK::MoltenVK ALIAS MoltenVK)
+ 
+ target_include_directories(MoltenVK
+@@ -44,8 +48,12 @@ target_compile_definitions(MoltenVK PUBLIC
  	"MVK_FRAMEWORK_VERSION=${PROJECT_VERSION}"
  )
  
