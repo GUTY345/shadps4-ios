@@ -263,6 +263,7 @@ if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
     target_link_libraries(shadps4-ios-smoke PRIVATE
         "-framework CoreGraphics"
         "-framework Foundation"
+        "-framework GameController"
         "-framework UIKit"
         "-framework UniformTypeIdentifiers"
     )

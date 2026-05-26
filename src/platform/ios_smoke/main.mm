@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #import <UIKit/UIKit.h>
+#import <GameController/GameController.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include <iomanip>
@@ -412,6 +413,7 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
 @property(nonatomic, strong) UILabel* gameLabel;
 @property(nonatomic, strong) UILabel* logLabel;
 @property(nonatomic, strong) UILabel* logsBodyLabel;
+@property(nonatomic, strong) UILabel* controllerLabel;
 @property(nonatomic, strong) GamePreviewCard* gamePreviewCard;
 @property(nonatomic, strong) UIButton* launchButton;
 @property(nonatomic, strong) UISegmentedControl* resolutionControl;
@@ -421,13 +423,16 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
 @property(nonatomic, strong) UISwitch* deviceGuardSwitch;
 @property(nonatomic, strong) UISwitch* verboseLogSwitch;
 @property(nonatomic, strong) UISwitch* shaderCacheSwitch;
+@property(nonatomic, strong) UISwitch* controllerRequiredSwitch;
 @property(nonatomic, strong) StatusCard* gameCard;
 @property(nonatomic, strong) StatusCard* jitCard;
 @property(nonatomic, strong) StatusCard* renderCard;
 @property(nonatomic, strong) StatusCard* deviceCard;
 @property(nonatomic, strong) StatusCard* coreCard;
+@property(nonatomic, strong) StatusCard* controllerCard;
 @property(nonatomic, strong) NSURL* selectedGameURL;
 @property(nonatomic, strong) NSURL* selectedGameRootURL;
+@property(nonatomic, strong) GCController* activeController;
 @property(nonatomic, assign) BOOL selectedURLNeedsStopAccessing;
 @end
 
@@ -501,6 +506,7 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     }
 
     [self showLibraryPage];
+    [self registerControllerNotifications];
     [self refreshRuntimeState];
 }
 
@@ -538,14 +544,23 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     self.renderCard = [[StatusCard alloc] initWithTitle:@"Resolution" value:@"900p" color:Color(0.38, 0.72, 0.48)];
     self.deviceCard = [[StatusCard alloc] initWithTitle:@"Device Policy" value:@"Checking" color:Color(0.50, 0.58, 0.96)];
     self.coreCard = [[StatusCard alloc] initWithTitle:@"Core Bridge" value:@"Checking" color:Color(0.74, 0.52, 0.96)];
+    self.controllerCard = [[StatusCard alloc] initWithTitle:@"Controller" value:@"Not connected" color:Color(0.12, 0.68, 0.78)];
 
-    UIStackView* cardRow = [[UIStackView alloc] initWithArrangedSubviews:@[
-        self.gameCard, self.jitCard, self.renderCard, self.deviceCard, self.coreCard
+    UIStackView* cardRowA = [[UIStackView alloc] initWithArrangedSubviews:@[
+        self.gameCard, self.jitCard, self.renderCard
     ]];
-    cardRow.translatesAutoresizingMaskIntoConstraints = NO;
-    cardRow.axis = UILayoutConstraintAxisHorizontal;
-    cardRow.distribution = UIStackViewDistributionFillEqually;
-    cardRow.spacing = 12.0;
+    cardRowA.translatesAutoresizingMaskIntoConstraints = NO;
+    cardRowA.axis = UILayoutConstraintAxisHorizontal;
+    cardRowA.distribution = UIStackViewDistributionFillEqually;
+    cardRowA.spacing = 12.0;
+
+    UIStackView* cardRowB = [[UIStackView alloc] initWithArrangedSubviews:@[
+        self.deviceCard, self.coreCard, self.controllerCard
+    ]];
+    cardRowB.translatesAutoresizingMaskIntoConstraints = NO;
+    cardRowB.axis = UILayoutConstraintAxisHorizontal;
+    cardRowB.distribution = UIStackViewDistributionFillEqually;
+    cardRowB.spacing = 12.0;
 
     UIButton* selectGameButton = MakeButton(@"Select Game or Folder", @"folder.badge.plus",
                                            Color(0.06, 0.43, 0.76));
@@ -578,7 +593,7 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     [runtimePanel.stack addArrangedSubview:self.logLabel];
 
     UIStackView* stack = MakeVerticalStack(@[
-        title, detail, cardRow, commandRow, selectedPanel, runtimePanel
+        title, detail, cardRowA, cardRowB, commandRow, selectedPanel, runtimePanel
     ], 18.0);
     return [self makePageWithStack:stack];
 }
@@ -637,6 +652,25 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
                                                                       detail:@"Keep iOS 18, RAM, and iPad M-series checks enabled."
                                                                    accessory:self.deviceGuardSwitch]];
 
+    self.controllerRequiredSwitch = [[UISwitch alloc] initWithFrame:CGRectZero];
+    self.controllerRequiredSwitch.on = YES;
+    [self.controllerRequiredSwitch addTarget:self action:@selector(settingChanged:)
+                            forControlEvents:UIControlEventValueChanged];
+    UIButton* refreshControllerButton = MakeButton(@"Refresh Controllers", @"gamecontroller.fill",
+                                                  Color(0.16, 0.22, 0.32));
+    [refreshControllerButton addTarget:self
+                                action:@selector(refreshControllerState)
+                      forControlEvents:UIControlEventTouchUpInside];
+    self.controllerLabel = MakeLabel(@"No controller detected yet. Connect a DualSense, DualShock 4, or MFi controller in iPadOS Bluetooth settings.",
+                                     14.0, UIFontWeightRegular, Color(0.70, 0.79, 0.90));
+    PanelView* inputPanel = [[PanelView alloc] initWithTitle:@"Input"
+                                                    subtitle:@"GameController.framework is used for iPadOS controller detection."];
+    [inputPanel.stack addArrangedSubview:[[SettingRow alloc] initWithTitle:@"Require controller before launch"
+                                                                    detail:@"Prevents starting a game with no playable input device attached."
+                                                                 accessory:self.controllerRequiredSwitch]];
+    [inputPanel.stack addArrangedSubview:refreshControllerButton];
+    [inputPanel.stack addArrangedSubview:self.controllerLabel];
+
     self.verboseLogSwitch = [[UISwitch alloc] initWithFrame:CGRectZero];
     [self.verboseLogSwitch addTarget:self action:@selector(settingChanged:)
                     forControlEvents:UIControlEventValueChanged];
@@ -654,7 +688,8 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
                                                                           detail:@"Reserve a stable setting for future Metal pipeline caching."
                                                                        accessory:self.shaderCacheSwitch]];
 
-    UIStackView* stack = MakeVerticalStack(@[ title, detail, renderPanel, runtimePanel, diagnosticsPanel ], 18.0);
+    UIStackView* stack =
+        MakeVerticalStack(@[ title, detail, renderPanel, runtimePanel, inputPanel, diagnosticsPanel ], 18.0);
     return [self makePageWithStack:stack];
 }
 
@@ -708,6 +743,71 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     self.logsBodyLabel.text = [existing stringByAppendingFormat:@"\n%@", line];
 }
 
+- (NSString*)summaryForController:(GCController*)controller {
+    if (controller == nil) {
+        return @"No controller detected. Pair a DualSense, DualShock 4, Xbox, or MFi controller in iPadOS Bluetooth settings.";
+    }
+
+    NSMutableArray<NSString*>* capabilities = [NSMutableArray array];
+    if (controller.extendedGamepad != nil) {
+        [capabilities addObject:@"extended gamepad"];
+    }
+    if (controller.microGamepad != nil) {
+        [capabilities addObject:@"micro gamepad"];
+    }
+    if (controller.motion != nil) {
+        [capabilities addObject:@"motion"];
+    }
+    if (controller.physicalInputProfile != nil) {
+        [capabilities addObject:@"physical input"];
+    }
+
+    NSString* vendor = controller.vendorName.length > 0 ? controller.vendorName : @"Unknown Controller";
+    NSString* profile = capabilities.count > 0 ? [capabilities componentsJoinedByString:@", "] : @"basic profile";
+    return [NSString stringWithFormat:@"%@\nProfile: %@", vendor, profile];
+}
+
+- (void)registerControllerNotifications {
+    NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
+    [center addObserver:self
+               selector:@selector(controllerDidConnect:)
+                   name:GCControllerDidConnectNotification
+                 object:nil];
+    [center addObserver:self
+               selector:@selector(controllerDidDisconnect:)
+                   name:GCControllerDidDisconnectNotification
+                 object:nil];
+    [GCController startWirelessControllerDiscoveryWithCompletionHandler:nil];
+}
+
+- (void)controllerDidConnect:(NSNotification*)notification {
+    self.activeController = notification.object;
+    [self appendLog:[NSString stringWithFormat:@"Status: controller connected: %@.",
+                                               self.activeController.vendorName ?: @"Unknown"]];
+    [self refreshControllerState];
+}
+
+- (void)controllerDidDisconnect:(NSNotification*)notification {
+    if (notification.object == self.activeController) {
+        self.activeController = nil;
+    }
+    [self appendLog:@"Status: controller disconnected."];
+    [self refreshControllerState];
+}
+
+- (void)refreshControllerState {
+    NSArray<GCController*>* controllers = GCController.controllers;
+    self.activeController = controllers.firstObject;
+    NSString* summary = [self summaryForController:self.activeController];
+    self.controllerLabel.text = summary;
+    [self.controllerCard setValue:self.activeController != nil ? (self.activeController.vendorName ?: @"Connected")
+                                                               : @"Not connected"];
+    [self appendLog:self.activeController != nil
+                        ? [NSString stringWithFormat:@"Status: input ready via %@.",
+                                                     self.activeController.vendorName ?: @"controller"]
+                        : @"Status: no controller detected."];
+}
+
 - (void)refreshRuntimeState {
     const auto policy = Core::IOSPort::QueryDevicePolicy();
     const auto jitStatus = Core::JIT::QueryExternalJitStatus();
@@ -716,6 +816,7 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     [self.jitCard setValue:jitValue];
     const auto coreStatus = Core::IOSPort::QueryEmulatorCoreStatus();
     [self.coreCard setValue:coreStatus.state_core_linked ? @"State linked" : @"Bridge only"];
+    [self refreshControllerState];
     self.launchButton.enabled = self.selectedGameURL != nil;
     self.launchButton.alpha = self.launchButton.enabled ? 1.0 : 0.55;
 }
@@ -730,10 +831,11 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     (void)sender;
     NSArray<NSString*>* profiles = @[ @"Stable", @"Balanced", @"Sharp" ];
     NSArray<NSString*>* pacing = @[ @"Smooth", @"Low Latency" ];
-    NSString* message = [NSString stringWithFormat:@"Status: settings updated. Profile=%@, Pacing=%@, JIT refresh=%@.",
+    NSString* message = [NSString stringWithFormat:@"Status: settings updated. Profile=%@, Pacing=%@, JIT refresh=%@, Controller required=%@.",
                                                    profiles[self.qualityControl.selectedSegmentIndex],
                                                    pacing[self.pacingControl.selectedSegmentIndex],
-                                                   self.jitRefreshSwitch.on ? @"on" : @"off"];
+                                                   self.jitRefreshSwitch.on ? @"on" : @"off",
+                                                   self.controllerRequiredSwitch.on ? @"on" : @"off"];
     [self appendLog:message];
 }
 
@@ -922,6 +1024,12 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
         [self refreshRuntimeState];
     }
 
+    if (self.controllerRequiredSwitch.on && self.activeController == nil) {
+        [self showAlertWithTitle:@"Controller required"
+                         message:@"Connect a DualSense, DualShock 4, Xbox, or MFi controller in iPadOS Bluetooth settings, then tap Refresh Controllers."];
+        return;
+    }
+
     const auto policy = Core::IOSPort::QueryDevicePolicy();
     if (self.deviceGuardSwitch.on && policy.tier == Core::IOSPort::SupportTier::Unsupported) {
         [self showAlertWithTitle:@"Unsupported device" message:ToNSString(policy.reason)];
@@ -956,6 +1064,12 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
                                                             preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)dealloc {
+    [GCController stopWirelessControllerDiscovery];
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+    [super dealloc];
 }
 
 @end
