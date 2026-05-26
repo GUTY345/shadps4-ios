@@ -712,7 +712,8 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     const auto policy = Core::IOSPort::QueryDevicePolicy();
     const auto jitStatus = Core::JIT::QueryExternalJitStatus();
     [self.deviceCard setValue:SupportTierText(policy.tier)];
-    [self.jitCard setValue:jitStatus.available ? @"Ready" : @"Not detected"];
+    NSString* jitValue = jitStatus.available ? ToNSString(jitStatus.provider) : @"Not detected";
+    [self.jitCard setValue:jitValue];
     const auto coreStatus = Core::IOSPort::QueryEmulatorCoreStatus();
     [self.coreCard setValue:coreStatus.state_core_linked ? @"State linked" : @"Bridge only"];
     self.launchButton.enabled = self.selectedGameURL != nil;
@@ -940,7 +941,7 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     if (!jitStatus.available) {
         [self appendLog:ToNSString("Status: " + coreStatus.blocker)];
         [self showAlertWithTitle:@"External JIT required"
-                         message:@"The iOS port can select a game now, but emulation cannot start until an external JIT provider is attached."];
+                         message:@"Open SideStore, enable JIT for this app, then return here and refresh runtime state before starting emulation."];
         return;
     }
 

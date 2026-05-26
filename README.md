@@ -40,7 +40,9 @@ iOS and iPadOS do not provide a normal desktop-style JIT environment for apps.
 This fork therefore does not assume that the emulator itself owns a JIT
 entitlement.
 
-Instead, the branch adds an external JIT bridge in:
+Instead, the branch expects JIT to be enabled from outside the app, for example
+with SideStore's JIT workflow during testing. The branch adds an external JIT
+bridge in:
 
 - `src/core/jit/external_jit_bridge.h`
 - `src/core/jit/external_jit_bridge.cpp`
@@ -57,6 +59,10 @@ Desktop tests can also set:
 ```sh
 SHADPS4_EXTERNAL_JIT_READY=1
 ```
+
+On Apple platforms the bridge also performs a lightweight executable-memory
+probe. When SideStore has enabled JIT for the app process, the launcher's
+External JIT card should change from `Not detected` to a ready provider state.
 
 This only reports readiness. It does not bypass iOS code-signing rules by
 itself.
