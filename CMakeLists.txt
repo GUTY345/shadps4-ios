@@ -44,6 +44,7 @@ option(ENABLE_UPDATER "Enables the options to updater" ON)
 option(ENABLE_TESTS "Build unit tests (requires GTest)" OFF)
 option(SHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE "Enable the external JIT readiness bridge" ON)
 option(SHADPS4_IOS_BUILD_SMOKE_APP "Build the iOS/iPadOS smoke-test app instead of the desktop CLI" ON)
+option(SHADPS4_IOS_BUILD_BUNDLED_MOLTENVK "Build and link the bundled MoltenVK target for the iOS smoke app" OFF)
 set(SHADPS4_IOS_MOLTENVK_XCFRAMEWORK "" CACHE PATH "Path to an iOS MoltenVK.xcframework")
 set(SHADPS4_IOS_MOLTENVK_FRAMEWORK "" CACHE PATH "Path to an iOS MoltenVK.framework")
 set(SHADPS4_IOS_MOLTENVK_DYLIB "" CACHE FILEPATH "Path to an iOS libMoltenVK.dylib")
@@ -240,6 +241,13 @@ if(NOT (GIT_REMOTE_URL_LOWER MATCHES "shadps4-emu/shadps4" AND (GIT_BRANCH STREQ
 endif()
 
 if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
+    if(SHADPS4_IOS_BUILD_BUNDLED_MOLTENVK AND NOT TARGET MoltenVK)
+        set(MVK_EXCLUDE_SPIRV_TOOLS ON CACHE BOOL "" FORCE)
+        set(MVK_USE_METAL_PRIVATE_API ON CACHE BOOL "" FORCE)
+        set(MVK_BUILD_SHADER_CONVERTER_TOOL OFF CACHE BOOL "" FORCE)
+        add_subdirectory(externals/MoltenVK)
+    endif()
+
     set(IOS_SMOKE_ASSETS src/platform/ios_smoke/Assets.xcassets)
     set(IOS_MOLTENVK_ICD "${CMAKE_CURRENT_SOURCE_DIR}/externals/MoltenVK/MoltenVK/icd/MoltenVK_icd.json")
     set(IOS_MOLTENVK_RUNTIME "")
@@ -300,6 +308,9 @@ if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
         src/core/platform/ios_emulator_core_bridge.h
         src/core/platform/ios_moltenvk_runtime.cpp
         src/core/platform/ios_moltenvk_runtime.h
+        src/core/platform/ios_vulkan_presenter_bridge.cpp
+        src/core/platform/ios_vulkan_presenter_bridge.h
+        src/frontend/window_system_info.h
         src/core/emulator_state.cpp
         src/core/emulator_state.h
         src/core/jit/arm64_dynarec_backend.cpp
@@ -316,7 +327,10 @@ if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
     if(EXISTS "${IOS_MOLTENVK_ICD}")
         target_compile_definitions(shadps4-ios-smoke PRIVATE SHADPS4_IOS_MOLTENVK_ICD_PACKAGED=1)
     endif()
-    if(IOS_MOLTENVK_RUNTIME)
+    if(TARGET MoltenVK)
+        target_compile_definitions(shadps4-ios-smoke PRIVATE SHADPS4_IOS_MOLTENVK_RUNTIME_LINKED=1)
+        target_link_libraries(shadps4-ios-smoke PRIVATE MoltenVK)
+    elseif(IOS_MOLTENVK_RUNTIME)
         target_compile_definitions(shadps4-ios-smoke PRIVATE SHADPS4_IOS_MOLTENVK_RUNTIME_LINKED=1)
         target_link_libraries(shadps4-ios-smoke PRIVATE "${IOS_MOLTENVK_RUNTIME}")
     endif()

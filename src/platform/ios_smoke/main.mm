@@ -14,6 +14,7 @@
 #include "core/platform/ios_emulator_core_bridge.h"
 #include "core/platform/ios_device_policy.h"
 #include "core/platform/ios_moltenvk_runtime.h"
+#include "core/platform/ios_vulkan_presenter_bridge.h"
 
 namespace {
 
@@ -959,9 +960,16 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     [self.metalSurfaceView renderDiagnosticFrame];
     const auto rendererStatus = Core::IOSPort::QueryRendererSurfaceStatus(
         self.metalSurfaceView.metalLayer != nil, self.metalSurfaceView.device != nil);
+    const auto windowInfo = Core::IOSPort::MakeUIKitMetalWindowSystemInfo(
+        self.metalSurfaceView.metalLayer, static_cast<float>(UIScreen.mainScreen.scale));
+    const auto presenterStatus = Core::IOSPort::QueryVulkanPresenterBridgeStatus(windowInfo);
     self.rendererSurfaceLabel.text =
-        [NSString stringWithFormat:@"%@\n%@", ToNSString(rendererStatus.summary),
-                                   ToNSString(rendererStatus.blocker)];
+        [NSString stringWithFormat:@"%@\n%@\nmacOS ARM presenter path: %@\n%@",
+                                   ToNSString(rendererStatus.summary),
+                                   ToNSString(rendererStatus.blocker),
+                                   presenterStatus.uses_macos_metal_surface_path ? @"shared"
+                                                                                 : @"not shared",
+                                   ToNSString(presenterStatus.summary)];
     const auto dynarecStatus = Core::JIT::QueryArm64DynarecStatus();
     self.dynarecLabel.text =
         [NSString stringWithFormat:@"%@\nSideStore JIT: %@ / backend: %@ / validation: %@ / translator: %@\nBlocked: %@",

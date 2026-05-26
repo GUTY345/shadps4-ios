@@ -8,11 +8,10 @@
 #include "common/assert.h"
 #include "common/logging/log.h"
 #include "common/string_literal.h"
-#include "common/types.h"
+#include "frontend/window_system_info.h"
 #include "video_core/renderer_vulkan/vk_common.h"
 
 namespace Frontend {
-enum class WindowSystemType : u8;
 class WindowSDL;
 } // namespace Frontend
 
@@ -20,6 +19,7 @@ namespace Vulkan {
 
 constexpr u32 TargetVulkanApiVersion = VK_API_VERSION_1_3;
 
+vk::SurfaceKHR CreateSurface(vk::Instance instance, const Frontend::WindowSystemInfo& window_info);
 vk::SurfaceKHR CreateSurface(vk::Instance instance, const Frontend::WindowSDL& emu_window);
 
 vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool enable_validation,

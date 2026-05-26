@@ -62,11 +62,21 @@ runtime. It can consume a `MoltenVK.xcframework`, `MoltenVK.framework`,
 -DSHADPS4_IOS_MOLTENVK_STATIC=/path/to/libMoltenVK.a
 ```
 
+It can also try to build the bundled MoltenVK source already used by the Apple
+desktop path:
+
+```sh
+-DSHADPS4_IOS_BUILD_BUNDLED_MOLTENVK=ON
+```
+
 If a runtime is present, the smoke app defines
 `SHADPS4_IOS_MOLTENVK_RUNTIME_LINKED` and the runtime panel reports whether the
-binary is loadable. The remaining renderer work is to pass the UIKit
-`CAMetalLayer` into the Vulkan presenter path used by
-`video_core/renderer_vulkan/vk_platform.cpp`.
+binary is loadable. The iOS smoke app now creates the same
+`Frontend::WindowSystemInfo` contract used by macOS ARM: `WindowSystemType::Metal`
+with a `CAMetalLayer` render surface. `video_core/renderer_vulkan/vk_platform.cpp`
+now exposes an overload that accepts that shared `WindowSystemInfo` directly, so
+iOS can enter the same `VK_EXT_metal_surface` presenter path once MoltenVK is
+linked.
 
 ## ARM64 dynarec and SideStore JIT gate
 
@@ -132,9 +142,9 @@ provisioning profile for `dev.guty345.shadps4-ios-smoke`.
 Next porting steps:
 
 1. Add an actual iOS MoltenVK runtime binary or xcframework to the configured
-   path if one is not already present locally.
-2. Pass the UIKit `CAMetalLayer` into the Vulkan presenter and create a
-   `VK_EXT_metal_surface` surface on device.
+   path, or enable the bundled MoltenVK build path.
+2. Create a Vulkan instance/surface from the UIKit `CAMetalLayer` through the
+   shared macOS ARM `WindowSystemInfo::Metal` presenter path.
 3. Build the x86_64 decoder, register model, memory callbacks, and ARM64 block
    emitter behind the SideStore JIT gate.
 4. Start loading real dumped game content only after renderer, sysmodule, and

@@ -139,6 +139,8 @@ Implemented in this branch:
 - MoltenVK ICD resource packaging when the upstream ICD file is present
 - MoltenVK runtime loader and CMake wiring for `.xcframework`, `.framework`,
   `.dylib`, or `.a` iOS builds
+- Optional bundled MoltenVK build path reused from the existing Apple/macOS ARM
+  dependency tree
 - ARM64 dynarec backend skeleton tied to external SideStore JIT status
 - ARM64 executable-code validation stub for testing JIT pages on device
 - SDL Metal surface path extended for iOS
@@ -163,17 +165,22 @@ To link an iOS MoltenVK runtime, configure with one of these paths:
 -DSHADPS4_IOS_MOLTENVK_STATIC=/path/to/libMoltenVK.a
 ```
 
+To try building the bundled MoltenVK source that already exists in this repo:
+
+```sh
+-DSHADPS4_IOS_BUILD_BUNDLED_MOLTENVK=ON
+```
+
 ## macOS ARM Reuse
 
 The macOS Apple Silicon path is useful, but it cannot be dropped into iPadOS
 unchanged. This fork can reuse Apple arm64 build detection, shared C++ state,
 controller mapping ideas, and the Metal/MoltenVK rendering direction.
 
-The parts still blocking real game execution are the desktop SDL/macOS window
-lifecycle, MoltenVK runtime linkage for iOS, and the x86/xbyak CPU backend. The
-app now owns a UIKit `CAMetalLayer` surface and a SideStore-gated ARM64 dynarec
-contract, so the next core step is wiring Vulkan/MoltenVK presentation and an
-x86_64-to-ARM64 CPU translator into `Core::Emulator::Run`.
+The app now reuses the same `WindowSystemInfo::Metal` contract that macOS ARM
+uses before `vk_platform.cpp` creates `VK_EXT_metal_surface`. The parts still
+blocking real game execution are full MoltenVK runtime validation on iOS,
+replacement of the desktop SDL lifecycle, and the x86/xbyak CPU backend.
 
 ## Legal Files and Game Dumps
 
