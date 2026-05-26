@@ -319,7 +319,10 @@ if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
         src/core/jit/external_jit_bridge.h
         ${IOS_SMOKE_RESOURCES}
     )
-    target_include_directories(shadps4-ios-smoke PRIVATE src)
+    target_include_directories(shadps4-ios-smoke PRIVATE
+        src
+        externals/vulkan-headers/include
+    )
     target_compile_definitions(shadps4-ios-smoke PRIVATE
         SHADPS4_IOS_PORT=1
         SHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE=1

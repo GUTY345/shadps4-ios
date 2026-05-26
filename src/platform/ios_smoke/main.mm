@@ -963,13 +963,16 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     const auto windowInfo = Core::IOSPort::MakeUIKitMetalWindowSystemInfo(
         self.metalSurfaceView.metalLayer, static_cast<float>(UIScreen.mainScreen.scale));
     const auto presenterStatus = Core::IOSPort::QueryVulkanPresenterBridgeStatus(windowInfo);
+    const auto surfaceProbeStatus = Core::IOSPort::ProbeVulkanMetalSurface(windowInfo);
     self.rendererSurfaceLabel.text =
-        [NSString stringWithFormat:@"%@\n%@\nmacOS ARM presenter path: %@\n%@",
+        [NSString stringWithFormat:@"%@\n%@\nmacOS ARM presenter path: %@\nVulkan instance: %@ / metal surface: %@\n%@",
                                    ToNSString(rendererStatus.summary),
                                    ToNSString(rendererStatus.blocker),
                                    presenterStatus.uses_macos_metal_surface_path ? @"shared"
                                                                                  : @"not shared",
-                                   ToNSString(presenterStatus.summary)];
+                                   surfaceProbeStatus.vulkan_instance_created ? @"created" : @"not created",
+                                   surfaceProbeStatus.metal_surface_created ? @"created" : @"not created",
+                                   ToNSString(surfaceProbeStatus.summary)];
     const auto dynarecStatus = Core::JIT::QueryArm64DynarecStatus();
     self.dynarecLabel.text =
         [NSString stringWithFormat:@"%@\nSideStore JIT: %@ / backend: %@ / validation: %@ / translator: %@\nBlocked: %@",
@@ -1205,6 +1208,15 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     if (!self.metalSurfaceView.isRendererSurfaceReady) {
         [self appendLog:ToNSString("Status: " + rendererStatus.blocker)];
         [self showAlertWithTitle:@"Renderer surface not ready" message:ToNSString(rendererStatus.blocker)];
+        return;
+    }
+    const auto windowInfo = Core::IOSPort::MakeUIKitMetalWindowSystemInfo(
+        self.metalSurfaceView.metalLayer, static_cast<float>(UIScreen.mainScreen.scale));
+    const auto surfaceProbeStatus = Core::IOSPort::ProbeVulkanMetalSurface(windowInfo);
+    if (!surfaceProbeStatus.ready_for_vulkan_presenter) {
+        [self appendLog:ToNSString("Status: " + surfaceProbeStatus.blocker)];
+        [self showAlertWithTitle:@"Vulkan presenter not ready"
+                         message:ToNSString(surfaceProbeStatus.blocker)];
         return;
     }
 

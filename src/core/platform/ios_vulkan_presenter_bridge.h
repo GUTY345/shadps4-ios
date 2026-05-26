@@ -13,6 +13,9 @@ struct VulkanPresenterBridgeStatus {
     bool has_metal_layer{};
     bool uses_shared_window_info_contract{};
     bool uses_macos_metal_surface_path{};
+    bool moltenvk_runtime_loadable{};
+    bool vulkan_instance_created{};
+    bool metal_surface_created{};
     bool ready_for_vulkan_presenter{};
     std::string summary;
     std::string blocker;
@@ -21,5 +24,6 @@ struct VulkanPresenterBridgeStatus {
 Frontend::WindowSystemInfo MakeUIKitMetalWindowSystemInfo(void* metal_layer, float scale);
 VulkanPresenterBridgeStatus QueryVulkanPresenterBridgeStatus(
     const Frontend::WindowSystemInfo& window_info);
+VulkanPresenterBridgeStatus ProbeVulkanMetalSurface(const Frontend::WindowSystemInfo& window_info);
 
 } // namespace Core::IOSPort
