@@ -124,22 +124,40 @@ Implemented in this branch:
 
 - iOS/iPadOS CMake scaffolding
 - iOS smoke-test app target
+- Native UIKit launcher UI for on-device testing
 - iOS deployment target set to 18.0
 - Device policy for RAM, iPad M-series support, and iPad Air M3
 - Resolution clamp to 720p or 900p
 - External JIT readiness bridge
+- SideStore-compatible executable-memory readiness probe
+- Game/folder picker with `eboot.bin`, `sce_sys/param.sfo`, and `icon0.png`
+  discovery
+- GameController.framework detection for DualSense, DualShock 4, Xbox, and MFi
+  controllers
+- Apple Runtime status panel for tracking which macOS ARM pieces can be reused
 - SDL Metal surface path extended for iOS
 - Port notes in `docs/ios-ipados-port.md`
 
 Still needed:
 
-- Native iOS app entry point
-- UIKit app lifecycle integration
-- File picker and sandbox storage flow
-- Controller and touch overlay work
+- UIKit-owned `CAMetalLayer` renderer surface
+- iOS MoltenVK packaging and on-device Vulkan presenter validation
+- Touch overlay input for playing without a hardware controller
 - ARM64 CPU backend integration
 - External JIT provider integration
-- MoltenVK packaging and on-device Vulkan presenter validation
+- Real game boot path after renderer, sysmodule, and CPU execution paths are
+  connected
+
+## macOS ARM Reuse
+
+The macOS Apple Silicon path is useful, but it cannot be dropped into iPadOS
+unchanged. This fork can reuse Apple arm64 build detection, shared C++ state,
+controller mapping ideas, and the Metal/MoltenVK rendering direction.
+
+The parts still blocking real game execution are the desktop SDL/macOS window
+lifecycle, MoltenVK packaging for iOS, and the x86/xbyak CPU backend. The next
+core step is to create a UIKit `CAMetalLayer` presenter and connect it to the
+renderer path, while keeping JIT enabled externally through SideStore.
 
 ## Legal Files and Game Dumps
 

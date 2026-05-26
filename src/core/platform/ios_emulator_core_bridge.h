@@ -16,6 +16,18 @@ struct EmulatorCoreStatus {
     std::string blocker;
 };
 
+struct AppleRuntimeReuseStatus {
+    bool apple_platform{};
+    bool arm64_build{};
+    bool macos_arm_reuse_candidate{};
+    bool metal_surface_candidate{};
+    bool desktop_window_blocked{};
+    bool x86_dynarec_blocked{};
+    std::string summary;
+    std::string reusable;
+    std::string blocker;
+};
+
 struct EmulatorCoreLaunchRequest {
     std::string game_path;
     std::string resolution_name;
@@ -26,6 +38,7 @@ struct EmulatorCoreLaunchRequest {
 };
 
 EmulatorCoreStatus QueryEmulatorCoreStatus();
+AppleRuntimeReuseStatus QueryAppleRuntimeReuseStatus();
 EmulatorCoreStatus PrepareEmulatorCoreLaunch(const EmulatorCoreLaunchRequest& request);
 
 } // namespace Core::IOSPort

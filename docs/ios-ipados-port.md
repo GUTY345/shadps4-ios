@@ -24,6 +24,32 @@ The bridge does not bypass iOS code-signing policy by itself. It only gives the 
 
 `src/core/platform/ios_device_policy.*` checks RAM, iPad class, and the supported resolution presets. Current iPad M-series detection is conservative and uses known `hw.machine` ranges so A-series iPads are not accepted accidentally.
 
+## macOS ARM reuse path
+
+The iOS smoke app now reports an Apple Runtime status from
+`src/core/platform/ios_emulator_core_bridge.*`. This is meant to keep the port
+honest while reusing as much of the macOS Apple Silicon work as possible.
+
+Reusable pieces from the macOS ARM path:
+
+- Apple/arm64 CMake detection and build configuration.
+- Shared C++ state surfaces such as `Core::EmulatorState`.
+- Controller mapping ideas from the SDL/GameController side.
+- The Metal presentation direction used by the Apple window path.
+- The MoltenVK-on-Metal renderer strategy, once packaging and surface creation
+  are made iOS-friendly.
+
+Pieces that are not directly reusable yet:
+
+- The desktop SDL window lifecycle.
+- The macOS app bundle/runtime assumptions.
+- The current MoltenVK dylib and ICD packaging path.
+- The x86/xbyak CPU backend.
+
+The next practical bridge is a UIKit-owned `CAMetalLayer` presenter that can be
+handed to MoltenVK or a future Metal renderer shim, plus an ARM64 JIT/dynarec
+path that only runs after the external JIT bridge reports readiness.
+
 ## Configure sketch
 
 An iOS SDK from full Xcode is required. Command Line Tools alone are not enough.
@@ -67,7 +93,8 @@ provisioning profile for `dev.guty345.shadps4-ios-smoke`.
 
 Next porting steps:
 
-1. Add an iOS app entry point instead of the current CLI `main.cpp`.
-2. Wire the external JIT bridge into the future ARM64 CPU backend.
-3. Switch SDL window creation on iOS to a UIKit-backed Metal surface.
-4. Package MoltenVK for iOS and validate the Vulkan presenter on device.
+1. Replace the launcher-only bridge with a UIKit/CAMetalLayer renderer surface.
+2. Package MoltenVK for iOS and validate the Vulkan presenter on device.
+3. Wire the external JIT bridge into a future ARM64 CPU backend.
+4. Start loading real dumped game content only after renderer, sysmodule, and
+   CPU execution paths are connected.

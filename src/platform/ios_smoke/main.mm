@@ -414,6 +414,7 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
 @property(nonatomic, strong) UILabel* logLabel;
 @property(nonatomic, strong) UILabel* logsBodyLabel;
 @property(nonatomic, strong) UILabel* controllerLabel;
+@property(nonatomic, strong) UILabel* appleRuntimeLabel;
 @property(nonatomic, strong) GamePreviewCard* gamePreviewCard;
 @property(nonatomic, strong) UIButton* launchButton;
 @property(nonatomic, strong) UISegmentedControl* resolutionControl;
@@ -652,6 +653,14 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
                                                                       detail:@"Keep iOS 18, RAM, and iPad M-series checks enabled."
                                                                    accessory:self.deviceGuardSwitch]];
 
+    self.appleRuntimeLabel =
+        MakeLabel(@"Checking Apple Silicon reuse path.", 14.0, UIFontWeightRegular, Color(0.70, 0.79, 0.90));
+    self.appleRuntimeLabel.font = [UIFont monospacedSystemFontOfSize:14.0 weight:UIFontWeightRegular];
+    PanelView* appleRuntimePanel =
+        [[PanelView alloc] initWithTitle:@"Apple Runtime"
+                                subtitle:@"Shows which macOS ARM pieces can be reused on iPadOS."];
+    [appleRuntimePanel.stack addArrangedSubview:self.appleRuntimeLabel];
+
     self.controllerRequiredSwitch = [[UISwitch alloc] initWithFrame:CGRectZero];
     self.controllerRequiredSwitch.on = YES;
     [self.controllerRequiredSwitch addTarget:self action:@selector(settingChanged:)
@@ -689,7 +698,8 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
                                                                        accessory:self.shaderCacheSwitch]];
 
     UIStackView* stack =
-        MakeVerticalStack(@[ title, detail, renderPanel, runtimePanel, inputPanel, diagnosticsPanel ], 18.0);
+        MakeVerticalStack(@[ title, detail, renderPanel, runtimePanel, appleRuntimePanel, inputPanel, diagnosticsPanel ],
+                          18.0);
     return [self makePageWithStack:stack];
 }
 
@@ -816,6 +826,12 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     [self.jitCard setValue:jitValue];
     const auto coreStatus = Core::IOSPort::QueryEmulatorCoreStatus();
     [self.coreCard setValue:coreStatus.state_core_linked ? @"State linked" : @"Bridge only"];
+    const auto appleStatus = Core::IOSPort::QueryAppleRuntimeReuseStatus();
+    self.appleRuntimeLabel.text =
+        [NSString stringWithFormat:@"%@\n%@\nBlocked: %@",
+                                   ToNSString(appleStatus.summary),
+                                   ToNSString(appleStatus.reusable),
+                                   ToNSString(appleStatus.blocker)];
     [self refreshControllerState];
     self.launchButton.enabled = self.selectedGameURL != nil;
     self.launchButton.alpha = self.launchButton.enabled ? 1.0 : 0.55;
