@@ -156,7 +156,7 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, Input::GameControllers* controller
         window_info.render_surface = SDL_GetPointerProperty(
             SDL_GetWindowProperties(window), SDL_PROP_WINDOW_WAYLAND_SURFACE_POINTER, NULL);
     }
-#elif defined(SDL_PLATFORM_MACOS)
+#elif defined(SDL_PLATFORM_MACOS) || defined(SDL_PLATFORM_IOS)
     window_info.type = WindowSystemType::Metal;
     window_info.render_surface = SDL_Metal_GetLayer(SDL_Metal_CreateView(window));
 #endif

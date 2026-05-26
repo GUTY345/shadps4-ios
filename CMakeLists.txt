@@ -9,8 +9,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 if(APPLE)
     list(APPEND ADDITIONAL_LANGUAGES OBJC)
-    # Starting with 15.4, Rosetta 2 has support for all the necessary instruction sets.
-    set(CMAKE_OSX_DEPLOYMENT_TARGET 15.4 CACHE STRING "")
+    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        list(APPEND ADDITIONAL_LANGUAGES OBJCXX)
+        set(SHADPS4_IOS_PORT ON CACHE BOOL "Build shadPS4 with experimental iOS/iPadOS port scaffolding")
+        set(CMAKE_OSX_DEPLOYMENT_TARGET 18.0 CACHE STRING "")
+    else()
+        # Starting with 15.4, Rosetta 2 has support for all the necessary instruction sets.
+        set(CMAKE_OSX_DEPLOYMENT_TARGET 15.4 CACHE STRING "")
+    endif()
 endif()
 
 if (NOT CMAKE_BUILD_TYPE)
@@ -36,6 +42,12 @@ endif()
 option(ENABLE_DISCORD_RPC "Enable the Discord RPC integration" ON)
 option(ENABLE_UPDATER "Enables the options to updater" ON)
 option(ENABLE_TESTS "Build unit tests (requires GTest)" OFF)
+option(SHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE "Enable the external JIT readiness bridge" ON)
+
+if(SHADPS4_IOS_PORT)
+    set(ENABLE_DISCORD_RPC OFF CACHE BOOL "Discord RPC is not supported by the iOS/iPadOS port" FORCE)
+    set(ENABLE_UPDATER OFF CACHE BOOL "The updater is disabled for the iOS/iPadOS sandbox" FORCE)
+endif()
 
 # First, determine whether to use CMAKE_OSX_ARCHITECTURES or CMAKE_SYSTEM_PROCESSOR.
 if (APPLE AND CMAKE_OSX_ARCHITECTURES)
@@ -359,6 +371,22 @@ set(KERNEL_LIB src/core/libraries/kernel/coredump/coredump.cpp
                src/core/libraries/kernel/aio.cpp
                src/core/libraries/kernel/aio.h
 )
+
+set(IOS_PORT)
+if(SHADPS4_IOS_PORT)
+    list(APPEND IOS_PORT
+        src/core/platform/ios_device_policy.h
+        src/core/platform/ios_device_policy.mm
+    )
+endif()
+
+set(EXTERNAL_JIT_BRIDGE)
+if(SHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE)
+    list(APPEND EXTERNAL_JIT_BRIDGE
+        src/core/jit/external_jit_bridge.cpp
+        src/core/jit/external_jit_bridge.h
+    )
+endif()
 
 set_source_files_properties(src/core/libraries/kernel/threads/stack.s PROPERTIES COMPILE_OPTIONS -Wno-unused-command-line-argument)
 
@@ -1155,6 +1183,8 @@ add_executable(shadps4
     ${INPUT}
     ${COMMON}
     ${CORE}
+    ${EXTERNAL_JIT_BRIDGE}
+    ${IOS_PORT}
     ${SHADER_RECOMPILER}
     ${VIDEO_CORE}
     ${EMULATOR}
@@ -1181,6 +1211,15 @@ endif()
 
 target_compile_definitions(shadps4 PRIVATE IMGUI_USER_CONFIG="imgui/imgui_config.h")
 target_compile_definitions(Dear_ImGui PRIVATE IMGUI_USER_CONFIG="${PROJECT_SOURCE_DIR}/src/imgui/imgui_config.h")
+
+if(SHADPS4_IOS_PORT)
+    target_compile_definitions(shadps4 PRIVATE SHADPS4_IOS_PORT=1)
+    target_link_libraries(shadps4 PRIVATE "-framework Foundation" "-framework UIKit")
+endif()
+
+if(SHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE)
+    target_compile_definitions(shadps4 PRIVATE SHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE=1)
+endif()
 
 if (ENABLE_DISCORD_RPC)
     target_compile_definitions(shadps4 PRIVATE ENABLE_DISCORD_RPC)

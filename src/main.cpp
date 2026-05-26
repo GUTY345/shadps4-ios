@@ -19,6 +19,12 @@
 #include "core/debugger.h"
 #include "core/file_sys/fs.h"
 #include "core/ipc/ipc.h"
+#if defined(SHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE)
+#include "core/jit/external_jit_bridge.h"
+#endif
+#if defined(SHADPS4_IOS_PORT)
+#include "core/platform/ios_device_policy.h"
+#endif
 #include "emulator.h"
 #include "imgui/big_picture/big_picture.h"
 
@@ -134,6 +140,33 @@ int main(int argc, char* argv[]) {
     std::shared_ptr<EmulatorSettingsImpl> emu_settings = std::make_shared<EmulatorSettingsImpl>();
     EmulatorSettingsImpl::SetInstance(emu_settings);
     emu_settings->Load();
+
+#if defined(SHADPS4_IOS_PORT)
+    const auto device_policy = Core::IOSPort::QueryDevicePolicy();
+    if (device_policy.tier == Core::IOSPort::SupportTier::Unsupported) {
+        std::cerr << "Unsupported iOS/iPadOS device: " << device_policy.reason << "\n";
+        return 1;
+    }
+
+    const auto mobile_resolution = Core::IOSPort::ClampResolution(
+        EmulatorSettings.GetInternalScreenWidth(), EmulatorSettings.GetInternalScreenHeight());
+    EmulatorSettings.SetWindowWidth(mobile_resolution.width);
+    EmulatorSettings.SetWindowHeight(mobile_resolution.height);
+    EmulatorSettings.SetInternalScreenWidth(mobile_resolution.width);
+    EmulatorSettings.SetInternalScreenHeight(mobile_resolution.height);
+    EmulatorSettings.SetFullScreen(false);
+#endif
+
+#if defined(SHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE)
+    const auto jit_status = Core::JIT::QueryExternalJitStatus();
+    (void)jit_status;
+#if defined(SHADPS4_IOS_PORT)
+    if (!jit_status.available || !Core::JIT::PrepareExternalJit()) {
+        std::cerr << "External JIT is required for the iOS/iPadOS port but was not detected.\n";
+        return 1;
+    }
+#endif
+#endif
 
     Common::Log::Shutdown();
     // Start configured log
