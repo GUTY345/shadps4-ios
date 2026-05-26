@@ -7,16 +7,27 @@
 #include <string_view>
 
 #if defined(__APPLE__)
-extern "C" bool shadps4_external_jit_is_ready() __attribute__((weak_import));
-extern "C" bool shadps4_external_jit_prepare_process() __attribute__((weak_import));
+#include <dlfcn.h>
 #endif
 
 namespace Core::JIT {
+namespace {
+
+#if defined(__APPLE__)
+using ExternalJitHook = bool (*)();
+
+ExternalJitHook FindExternalJitHook(const char* name) {
+    return reinterpret_cast<ExternalJitHook>(dlsym(RTLD_DEFAULT, name));
+}
+#endif
+
+} // namespace
 
 ExternalJitStatus QueryExternalJitStatus() {
 #if defined(__APPLE__)
-    if (&shadps4_external_jit_is_ready != nullptr && shadps4_external_jit_is_ready()) {
-        return {true, "weak external hook"};
+    if (const auto hook = FindExternalJitHook("shadps4_external_jit_is_ready");
+        hook != nullptr && hook()) {
+        return {true, "dynamic external hook"};
     }
 #endif
 
@@ -30,8 +41,9 @@ ExternalJitStatus QueryExternalJitStatus() {
 
 bool PrepareExternalJit() {
 #if defined(__APPLE__)
-    if (&shadps4_external_jit_prepare_process != nullptr) {
-        return shadps4_external_jit_prepare_process();
+    if (const auto hook = FindExternalJitHook("shadps4_external_jit_prepare_process");
+        hook != nullptr) {
+        return hook();
     }
 #endif
     return QueryExternalJitStatus().available;

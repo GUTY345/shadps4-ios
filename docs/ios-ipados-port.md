@@ -38,6 +38,33 @@ cmake -S . -B build/ios-device \
   -DSHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE=ON
 ```
 
+For the current on-device smoke test, generate the Xcode project with:
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer cmake -S . -B build/ios-smoke -G Xcode \
+  -DCMAKE_SYSTEM_NAME=iOS \
+  -DCMAKE_OSX_SYSROOT=iphoneos \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=18.0 \
+  -DSHADPS4_IOS_PORT=ON \
+  -DSHADPS4_IOS_BUILD_SMOKE_APP=ON \
+  -DSHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE=ON
+```
+
+The smoke app can be compiled without signing:
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
+  -project build/ios-smoke/shadPS4.xcodeproj \
+  -scheme shadps4-ios-smoke \
+  -configuration Debug \
+  -destination 'generic/platform=iOS' \
+  clean build CODE_SIGNING_ALLOWED=NO
+```
+
+Installing on a physical device requires an Apple Development signing identity and a matching
+provisioning profile for `dev.guty345.shadps4-ios-smoke`.
+
 Next porting steps:
 
 1. Add an iOS app entry point instead of the current CLI `main.cpp`.

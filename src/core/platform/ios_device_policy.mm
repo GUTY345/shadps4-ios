@@ -78,7 +78,7 @@ DevicePolicy QueryDevicePolicy() {
     DevicePolicy policy{};
     policy.machine_identifier = QuerySysctlString("hw.machine");
     policy.physical_memory_bytes = QueryPhysicalMemoryBytes();
-    policy.is_ipad = UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad;
+    policy.is_ipad = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad;
     policy.is_ipad_m1_or_newer = policy.is_ipad && IsKnownMSeriesIPad(policy.machine_identifier);
     const NSOperatingSystemVersion os_version = [[NSProcessInfo processInfo] operatingSystemVersion];
     policy.os_major_version = static_cast<int>(os_version.majorVersion);

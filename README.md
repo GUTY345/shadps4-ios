@@ -78,6 +78,33 @@ cmake -S . -B build/ios-device \
   -DSHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE=ON
 ```
 
+Current on-device testing starts with the smoke-test app:
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer cmake -S . -B build/ios-smoke -G Xcode \
+  -DCMAKE_SYSTEM_NAME=iOS \
+  -DCMAKE_OSX_SYSROOT=iphoneos \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=18.0 \
+  -DSHADPS4_IOS_PORT=ON \
+  -DSHADPS4_IOS_BUILD_SMOKE_APP=ON \
+  -DSHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE=ON
+```
+
+Unsigned compile check:
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
+  -project build/ios-smoke/shadPS4.xcodeproj \
+  -scheme shadps4-ios-smoke \
+  -configuration Debug \
+  -destination 'generic/platform=iOS' \
+  clean build CODE_SIGNING_ALLOWED=NO
+```
+
+Physical-device install requires an Apple Development signing identity and a
+provisioning profile for `dev.guty345.shadps4-ios-smoke`.
+
 The normal desktop shadPS4 build path is inherited from upstream. See the
 original build documentation:
 
@@ -90,6 +117,7 @@ original build documentation:
 Implemented in this branch:
 
 - iOS/iPadOS CMake scaffolding
+- iOS smoke-test app target
 - iOS deployment target set to 18.0
 - Device policy for RAM, iPad M-series support, and iPad Air M3
 - Resolution clamp to 720p or 900p

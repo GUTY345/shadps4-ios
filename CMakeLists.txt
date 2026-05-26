@@ -43,6 +43,7 @@ option(ENABLE_DISCORD_RPC "Enable the Discord RPC integration" ON)
 option(ENABLE_UPDATER "Enables the options to updater" ON)
 option(ENABLE_TESTS "Build unit tests (requires GTest)" OFF)
 option(SHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE "Enable the external JIT readiness bridge" ON)
+option(SHADPS4_IOS_BUILD_SMOKE_APP "Build the iOS/iPadOS smoke-test app instead of the desktop CLI" ON)
 
 if(SHADPS4_IOS_PORT)
     set(ENABLE_DISCORD_RPC OFF CACHE BOOL "Discord RPC is not supported by the iOS/iPadOS port" FORCE)
@@ -232,6 +233,34 @@ string(TOLOWER "${GIT_REMOTE_URL}" GIT_REMOTE_URL_LOWER)
 if(NOT (GIT_REMOTE_URL_LOWER MATCHES "shadps4-emu/shadps4" AND (GIT_BRANCH STREQUAL "main" OR "$ENV{GITHUB_REF}" MATCHES "refs/tags/")))
     message(STATUS "not main, disabling auto update")
     set(ENABLE_UPDATER OFF)
+endif()
+
+if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
+    add_executable(shadps4-ios-smoke MACOSX_BUNDLE
+        src/platform/ios_smoke/main.mm
+        src/core/platform/ios_device_policy.h
+        src/core/platform/ios_device_policy.mm
+        src/core/jit/external_jit_bridge.cpp
+        src/core/jit/external_jit_bridge.h
+    )
+    target_include_directories(shadps4-ios-smoke PRIVATE src)
+    target_compile_definitions(shadps4-ios-smoke PRIVATE
+        SHADPS4_IOS_PORT=1
+        SHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE=1
+    )
+    target_link_libraries(shadps4-ios-smoke PRIVATE
+        "-framework CoreGraphics"
+        "-framework Foundation"
+        "-framework UIKit"
+    )
+    set_target_properties(shadps4-ios-smoke PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/ios_smoke/Info.plist.in"
+        XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "dev.guty345.shadps4-ios-smoke"
+        XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
+        XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
+        XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "18.0"
+    )
+    return()
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
