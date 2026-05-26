@@ -22,6 +22,8 @@
     <true/>
     <key>MinimumOSVersion</key>
     <string>18.0</string>
+    <key>UIRequiresFullScreen</key>
+    <true/>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
