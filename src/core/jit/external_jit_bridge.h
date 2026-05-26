@@ -12,7 +12,18 @@ struct ExternalJitStatus {
     std::string provider;
 };
 
+struct Arm64DynarecStatus {
+    bool arm64_build;
+    bool external_jit_available;
+    bool dynarec_backend_linked;
+    bool executable_memory_ready;
+    std::string summary;
+    std::string blocker;
+};
+
 ExternalJitStatus QueryExternalJitStatus();
 bool PrepareExternalJit();
+Arm64DynarecStatus QueryArm64DynarecStatus();
+bool PrepareArm64Dynarec();
 
 } // namespace Core::JIT

@@ -36,6 +36,7 @@ Reusable pieces from the macOS ARM path:
 - Shared C++ state surfaces such as `Core::EmulatorState`.
 - Controller mapping ideas from the SDL/GameController side.
 - The Metal presentation direction used by the Apple window path.
+- A UIKit-owned `CAMetalLayer` smoke surface for iPadOS.
 - The MoltenVK-on-Metal renderer strategy, once packaging and surface creation
   are made iOS-friendly.
 
@@ -46,9 +47,27 @@ Pieces that are not directly reusable yet:
 - The current MoltenVK dylib and ICD packaging path.
 - The x86/xbyak CPU backend.
 
-The next practical bridge is a UIKit-owned `CAMetalLayer` presenter that can be
-handed to MoltenVK or a future Metal renderer shim, plus an ARM64 JIT/dynarec
-path that only runs after the external JIT bridge reports readiness.
+The current smoke app creates a real `CAMetalLayer`, attaches a Metal device,
+and clears a diagnostic drawable. That proves the iPadOS app has a presenter
+surface that can later be handed to MoltenVK or a future Metal renderer shim.
+
+The remaining renderer work is to package/link an iOS MoltenVK runtime binary
+and pass the UIKit `CAMetalLayer` into the Vulkan presenter path used by
+`video_core/renderer_vulkan/vk_platform.cpp`.
+
+## ARM64 dynarec and SideStore JIT gate
+
+`src/core/jit/external_jit_bridge.*` now exposes a separate ARM64 dynarec status
+gate. The gate checks that the app is running as arm64 and that SideStore or
+another external workflow has opened executable memory.
+
+This does not implement the PS4 x86_64-to-ARM64 translator yet. It gives the CPU
+backend a strict contract:
+
+1. SideStore must enable JIT for the app process.
+2. `QueryArm64DynarecStatus()` must report executable memory readiness.
+3. A future ARM64 dynarec backend can provide `shadps4_arm64_dynarec_prepare()`
+   before the emulator enters translated CPU execution.
 
 ## Configure sketch
 
@@ -93,8 +112,10 @@ provisioning profile for `dev.guty345.shadps4-ios-smoke`.
 
 Next porting steps:
 
-1. Replace the launcher-only bridge with a UIKit/CAMetalLayer renderer surface.
-2. Package MoltenVK for iOS and validate the Vulkan presenter on device.
-3. Wire the external JIT bridge into a future ARM64 CPU backend.
+1. Add an iOS MoltenVK runtime binary or xcframework to the app bundle/link step.
+2. Pass the UIKit `CAMetalLayer` into the Vulkan presenter and create a
+   `VK_EXT_metal_surface` surface on device.
+3. Implement or port a PS4 x86_64-to-ARM64 dynarec backend behind the SideStore
+   JIT gate.
 4. Start loading real dumped game content only after renderer, sysmodule, and
    CPU execution paths are connected.

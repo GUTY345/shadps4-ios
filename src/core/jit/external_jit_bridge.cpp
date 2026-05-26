@@ -72,4 +72,50 @@ bool PrepareExternalJit() {
     return QueryExternalJitStatus().available;
 }
 
+Arm64DynarecStatus QueryArm64DynarecStatus() {
+    const auto jit_status = QueryExternalJitStatus();
+    Arm64DynarecStatus status{
+#if defined(__arm64__) || defined(__aarch64__)
+        .arm64_build = true,
+#else
+        .arm64_build = false,
+#endif
+        .external_jit_available = jit_status.available,
+        .dynarec_backend_linked = false,
+        .executable_memory_ready = jit_status.available,
+    };
+
+    if (!status.arm64_build) {
+        status.summary = "ARM64 dynarec path is inactive on this architecture.";
+        status.blocker = "Build the iOS port for arm64 device hardware.";
+        return status;
+    }
+
+    if (!status.external_jit_available) {
+        status.summary = "ARM64 dynarec gate is waiting for SideStore JIT.";
+        status.blocker = "Enable JIT for this app in SideStore, then return and refresh runtime state.";
+        return status;
+    }
+
+    status.summary = "SideStore JIT gate is open for ARM64 executable memory.";
+    status.blocker =
+        "The executable-memory gate is ready, but the PS4 x86_64-to-ARM64 dynarec backend is not linked yet.";
+    return status;
+}
+
+bool PrepareArm64Dynarec() {
+    if (!PrepareExternalJit()) {
+        return false;
+    }
+
+#if defined(__APPLE__)
+    if (const auto hook = FindExternalJitHook("shadps4_arm64_dynarec_prepare");
+        hook != nullptr) {
+        return hook();
+    }
+#endif
+
+    return QueryArm64DynarecStatus().dynarec_backend_linked;
+}
+
 } // namespace Core::JIT

@@ -21,6 +21,9 @@ struct AppleRuntimeReuseStatus {
     bool arm64_build{};
     bool macos_arm_reuse_candidate{};
     bool metal_surface_candidate{};
+    bool ui_kit_metal_surface_linked{};
+    bool moltenvk_icd_packaged{};
+    bool moltenvk_runtime_linked{};
     bool desktop_window_blocked{};
     bool x86_dynarec_blocked{};
     std::string summary;
@@ -39,6 +42,7 @@ struct EmulatorCoreLaunchRequest {
 
 EmulatorCoreStatus QueryEmulatorCoreStatus();
 AppleRuntimeReuseStatus QueryAppleRuntimeReuseStatus();
+EmulatorCoreStatus QueryRendererSurfaceStatus(bool has_metal_layer, bool has_metal_device);
 EmulatorCoreStatus PrepareEmulatorCoreLaunch(const EmulatorCoreLaunchRequest& request);
 
 } // namespace Core::IOSPort

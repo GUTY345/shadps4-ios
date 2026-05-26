@@ -237,10 +237,15 @@ endif()
 
 if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
     set(IOS_SMOKE_ASSETS src/platform/ios_smoke/Assets.xcassets)
+    set(IOS_MOLTENVK_ICD "${CMAKE_CURRENT_SOURCE_DIR}/externals/MoltenVK/MoltenVK/icd/MoltenVK_icd.json")
     file(GLOB IOS_SMOKE_ICON_FILES CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/ios_smoke/Assets.xcassets/AppIcon.appiconset/*.png"
     )
-    set_source_files_properties(${IOS_SMOKE_ASSETS} ${IOS_SMOKE_ICON_FILES}
+    set(IOS_SMOKE_RESOURCES ${IOS_SMOKE_ASSETS} ${IOS_SMOKE_ICON_FILES})
+    if(EXISTS "${IOS_MOLTENVK_ICD}")
+        list(APPEND IOS_SMOKE_RESOURCES "${IOS_MOLTENVK_ICD}")
+    endif()
+    set_source_files_properties(${IOS_SMOKE_RESOURCES}
         PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
     add_executable(shadps4-ios-smoke MACOSX_BUNDLE
         src/platform/ios_smoke/main.mm
@@ -252,18 +257,22 @@ if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
         src/core/emulator_state.h
         src/core/jit/external_jit_bridge.cpp
         src/core/jit/external_jit_bridge.h
-        ${IOS_SMOKE_ASSETS}
-        ${IOS_SMOKE_ICON_FILES}
+        ${IOS_SMOKE_RESOURCES}
     )
     target_include_directories(shadps4-ios-smoke PRIVATE src)
     target_compile_definitions(shadps4-ios-smoke PRIVATE
         SHADPS4_IOS_PORT=1
         SHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE=1
     )
+    if(EXISTS "${IOS_MOLTENVK_ICD}")
+        target_compile_definitions(shadps4-ios-smoke PRIVATE SHADPS4_IOS_MOLTENVK_ICD_PACKAGED=1)
+    endif()
     target_link_libraries(shadps4-ios-smoke PRIVATE
         "-framework CoreGraphics"
         "-framework Foundation"
         "-framework GameController"
+        "-framework Metal"
+        "-framework QuartzCore"
         "-framework UIKit"
         "-framework UniformTypeIdentifiers"
     )

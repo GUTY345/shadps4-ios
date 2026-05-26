@@ -135,16 +135,19 @@ Implemented in this branch:
 - GameController.framework detection for DualSense, DualShock 4, Xbox, and MFi
   controllers
 - Apple Runtime status panel for tracking which macOS ARM pieces can be reused
+- UIKit-owned `CAMetalLayer` renderer surface with a Metal diagnostic clear
+- MoltenVK ICD resource packaging when the upstream ICD file is present
+- ARM64 dynarec readiness gate tied to external SideStore JIT status
 - SDL Metal surface path extended for iOS
 - Port notes in `docs/ios-ipados-port.md`
 
 Still needed:
 
-- UIKit-owned `CAMetalLayer` renderer surface
-- iOS MoltenVK packaging and on-device Vulkan presenter validation
+- iOS MoltenVK runtime binary or xcframework linkage
+- On-device Vulkan presenter validation through `VK_EXT_metal_surface`
 - Touch overlay input for playing without a hardware controller
-- ARM64 CPU backend integration
-- External JIT provider integration
+- PS4 x86_64-to-ARM64 dynarec backend integration
+- External JIT provider integration beyond readiness detection
 - Real game boot path after renderer, sysmodule, and CPU execution paths are
   connected
 
@@ -155,9 +158,10 @@ unchanged. This fork can reuse Apple arm64 build detection, shared C++ state,
 controller mapping ideas, and the Metal/MoltenVK rendering direction.
 
 The parts still blocking real game execution are the desktop SDL/macOS window
-lifecycle, MoltenVK packaging for iOS, and the x86/xbyak CPU backend. The next
-core step is to create a UIKit `CAMetalLayer` presenter and connect it to the
-renderer path, while keeping JIT enabled externally through SideStore.
+lifecycle, MoltenVK runtime linkage for iOS, and the x86/xbyak CPU backend. The
+app now owns a UIKit `CAMetalLayer` surface and a SideStore-gated ARM64 dynarec
+contract, so the next core step is wiring Vulkan/MoltenVK presentation and an
+x86_64-to-ARM64 CPU translator into `Core::Emulator::Run`.
 
 ## Legal Files and Game Dumps
 

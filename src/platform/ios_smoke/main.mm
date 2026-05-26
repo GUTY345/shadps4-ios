@@ -3,6 +3,8 @@
 
 #import <UIKit/UIKit.h>
 #import <GameController/GameController.h>
+#import <Metal/Metal.h>
+#import <QuartzCore/QuartzCore.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include <iomanip>
@@ -300,6 +302,106 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
 
 @end
 
+@interface MetalSurfaceView : UIView
+@property(nonatomic, strong) id<MTLDevice> device;
+@property(nonatomic, strong) id<MTLCommandQueue> commandQueue;
+@property(nonatomic, strong) UILabel* overlayLabel;
+- (CAMetalLayer*)metalLayer;
+- (BOOL)isRendererSurfaceReady;
+- (void)renderDiagnosticFrame;
+@end
+
+@implementation MetalSurfaceView
+
++ (Class)layerClass {
+    return CAMetalLayer.class;
+}
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self == nil) {
+        return nil;
+    }
+
+    self.translatesAutoresizingMaskIntoConstraints = NO;
+    self.backgroundColor = Color(0.03, 0.04, 0.06);
+    self.layer.cornerRadius = 8.0;
+    self.layer.masksToBounds = YES;
+    self.layer.borderWidth = 1.0;
+    self.layer.borderColor = Color(0.20, 0.27, 0.34).CGColor;
+
+    self.device = MTLCreateSystemDefaultDevice();
+    self.commandQueue = [self.device newCommandQueue];
+
+    CAMetalLayer* layer = self.metalLayer;
+    layer.device = self.device;
+    layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+    layer.framebufferOnly = YES;
+    layer.opaque = YES;
+    layer.contentsScale = UIScreen.mainScreen.scale;
+    layer.backgroundColor = Color(0.03, 0.04, 0.06).CGColor;
+
+    self.overlayLabel = MakeLabel(@"CAMetalLayer", 14.0, UIFontWeightSemibold, Color(0.84, 0.92, 1.0));
+    self.overlayLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:self.overlayLabel];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [self.heightAnchor constraintEqualToConstant:220.0],
+        [self.overlayLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:16.0],
+        [self.overlayLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-16.0],
+        [self.overlayLabel.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-14.0]
+    ]];
+
+    return self;
+}
+
+- (CAMetalLayer*)metalLayer {
+    return (CAMetalLayer*)self.layer;
+}
+
+- (BOOL)isRendererSurfaceReady {
+    return self.metalLayer != nil && self.device != nil && self.commandQueue != nil;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    CGFloat scale = UIScreen.mainScreen.scale;
+    self.metalLayer.contentsScale = scale;
+    self.metalLayer.drawableSize = CGSizeMake(self.bounds.size.width * scale, self.bounds.size.height * scale);
+    [self renderDiagnosticFrame];
+}
+
+- (void)renderDiagnosticFrame {
+    if (![self isRendererSurfaceReady] || self.bounds.size.width <= 0.0 || self.bounds.size.height <= 0.0) {
+        self.overlayLabel.text = @"Metal unavailable";
+        return;
+    }
+
+    id<CAMetalDrawable> drawable = [self.metalLayer nextDrawable];
+    if (drawable == nil) {
+        self.overlayLabel.text = @"Waiting for drawable";
+        return;
+    }
+
+    MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor renderPassDescriptor];
+    pass.colorAttachments[0].texture = drawable.texture;
+    pass.colorAttachments[0].loadAction = MTLLoadActionClear;
+    pass.colorAttachments[0].storeAction = MTLStoreActionStore;
+    pass.colorAttachments[0].clearColor = MTLClearColorMake(0.04, 0.10, 0.16, 1.0);
+
+    id<MTLCommandBuffer> commandBuffer = [self.commandQueue commandBuffer];
+    id<MTLRenderCommandEncoder> encoder = [commandBuffer renderCommandEncoderWithDescriptor:pass];
+    [encoder endEncoding];
+    [commandBuffer presentDrawable:drawable];
+    [commandBuffer commit];
+
+    self.overlayLabel.text = [NSString stringWithFormat:@"CAMetalLayer ready / %.0fx%.0f",
+                                                        self.metalLayer.drawableSize.width,
+                                                        self.metalLayer.drawableSize.height];
+}
+
+@end
+
 @interface GamePreviewCard : UIView
 @property(nonatomic, strong) UIImageView* artworkView;
 @property(nonatomic, strong) UILabel* titleLabel;
@@ -415,6 +517,9 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
 @property(nonatomic, strong) UILabel* logsBodyLabel;
 @property(nonatomic, strong) UILabel* controllerLabel;
 @property(nonatomic, strong) UILabel* appleRuntimeLabel;
+@property(nonatomic, strong) UILabel* rendererSurfaceLabel;
+@property(nonatomic, strong) UILabel* dynarecLabel;
+@property(nonatomic, strong) MetalSurfaceView* metalSurfaceView;
 @property(nonatomic, strong) GamePreviewCard* gamePreviewCard;
 @property(nonatomic, strong) UIButton* launchButton;
 @property(nonatomic, strong) UISegmentedControl* resolutionControl;
@@ -593,8 +698,18 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     self.logLabel.font = [UIFont monospacedSystemFontOfSize:14.0 weight:UIFontWeightRegular];
     [runtimePanel.stack addArrangedSubview:self.logLabel];
 
+    PanelView* rendererPanel =
+        [[PanelView alloc] initWithTitle:@"Renderer Surface"
+                                subtitle:@"UIKit owns the CAMetalLayer that MoltenVK or a Metal renderer will present into."];
+    self.metalSurfaceView = [[MetalSurfaceView alloc] initWithFrame:CGRectZero];
+    self.rendererSurfaceLabel =
+        MakeLabel(@"Checking CAMetalLayer.", 14.0, UIFontWeightRegular, Color(0.70, 0.79, 0.90));
+    self.rendererSurfaceLabel.font = [UIFont monospacedSystemFontOfSize:14.0 weight:UIFontWeightRegular];
+    [rendererPanel.stack addArrangedSubview:self.metalSurfaceView];
+    [rendererPanel.stack addArrangedSubview:self.rendererSurfaceLabel];
+
     UIStackView* stack = MakeVerticalStack(@[
-        title, detail, cardRowA, cardRowB, commandRow, selectedPanel, runtimePanel
+        title, detail, cardRowA, cardRowB, commandRow, selectedPanel, rendererPanel, runtimePanel
     ], 18.0);
     return [self makePageWithStack:stack];
 }
@@ -652,6 +767,10 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     [runtimePanel.stack addArrangedSubview:[[SettingRow alloc] initWithTitle:@"Device requirement guard"
                                                                       detail:@"Keep iOS 18, RAM, and iPad M-series checks enabled."
                                                                    accessory:self.deviceGuardSwitch]];
+    self.dynarecLabel = MakeLabel(@"Checking ARM64 dynarec gate.", 14.0, UIFontWeightRegular,
+                                  Color(0.70, 0.79, 0.90));
+    self.dynarecLabel.font = [UIFont monospacedSystemFontOfSize:14.0 weight:UIFontWeightRegular];
+    [runtimePanel.stack addArrangedSubview:self.dynarecLabel];
 
     self.appleRuntimeLabel =
         MakeLabel(@"Checking Apple Silicon reuse path.", 14.0, UIFontWeightRegular, Color(0.70, 0.79, 0.90));
@@ -828,10 +947,25 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     [self.coreCard setValue:coreStatus.state_core_linked ? @"State linked" : @"Bridge only"];
     const auto appleStatus = Core::IOSPort::QueryAppleRuntimeReuseStatus();
     self.appleRuntimeLabel.text =
-        [NSString stringWithFormat:@"%@\n%@\nBlocked: %@",
+        [NSString stringWithFormat:@"%@\n%@\nMoltenVK ICD: %@ / runtime: %@\nBlocked: %@",
                                    ToNSString(appleStatus.summary),
                                    ToNSString(appleStatus.reusable),
+                                   appleStatus.moltenvk_icd_packaged ? @"packaged" : @"missing",
+                                   appleStatus.moltenvk_runtime_linked ? @"linked" : @"not linked",
                                    ToNSString(appleStatus.blocker)];
+    [self.metalSurfaceView renderDiagnosticFrame];
+    const auto rendererStatus = Core::IOSPort::QueryRendererSurfaceStatus(
+        self.metalSurfaceView.metalLayer != nil, self.metalSurfaceView.device != nil);
+    self.rendererSurfaceLabel.text =
+        [NSString stringWithFormat:@"%@\n%@", ToNSString(rendererStatus.summary),
+                                   ToNSString(rendererStatus.blocker)];
+    const auto dynarecStatus = Core::JIT::QueryArm64DynarecStatus();
+    self.dynarecLabel.text =
+        [NSString stringWithFormat:@"%@\nSideStore JIT: %@ / backend: %@\nBlocked: %@",
+                                   ToNSString(dynarecStatus.summary),
+                                   dynarecStatus.external_jit_available ? @"ready" : @"waiting",
+                                   dynarecStatus.dynarec_backend_linked ? @"linked" : @"not linked",
+                                   ToNSString(dynarecStatus.blocker)];
     [self refreshControllerState];
     self.launchButton.enabled = self.selectedGameURL != nil;
     self.launchButton.alpha = self.launchButton.enabled ? 1.0 : 0.55;
@@ -1053,6 +1187,14 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     }
 
     const auto jitStatus = Core::JIT::QueryExternalJitStatus();
+    const auto rendererStatus = Core::IOSPort::QueryRendererSurfaceStatus(
+        self.metalSurfaceView.metalLayer != nil, self.metalSurfaceView.device != nil);
+    if (!self.metalSurfaceView.isRendererSurfaceReady) {
+        [self appendLog:ToNSString("Status: " + rendererStatus.blocker)];
+        [self showAlertWithTitle:@"Renderer surface not ready" message:ToNSString(rendererStatus.blocker)];
+        return;
+    }
+
     Core::IOSPort::EmulatorCoreLaunchRequest request{
         .game_path = self.selectedGameURL.path.UTF8String ?: "",
         .resolution_name = self.resolutionControl.selectedSegmentIndex == 0 ? "720p" : "900p",
@@ -1066,6 +1208,13 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
         [self appendLog:ToNSString("Status: " + coreStatus.blocker)];
         [self showAlertWithTitle:@"External JIT required"
                          message:@"Open SideStore, enable JIT for this app, then return here and refresh runtime state before starting emulation."];
+        return;
+    }
+
+    const auto dynarecStatus = Core::JIT::QueryArm64DynarecStatus();
+    if (!dynarecStatus.dynarec_backend_linked) {
+        [self appendLog:ToNSString("Status: " + dynarecStatus.blocker)];
+        [self showAlertWithTitle:@"ARM64 dynarec not linked" message:ToNSString(dynarecStatus.blocker)];
         return;
     }
 

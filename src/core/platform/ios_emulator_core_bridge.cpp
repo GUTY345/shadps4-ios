@@ -36,7 +36,16 @@ AppleRuntimeReuseStatus QueryAppleRuntimeReuseStatus() {
     status.metal_surface_candidate = status.apple_platform;
 
 #if defined(SHADPS4_IOS_PORT)
+    status.ui_kit_metal_surface_linked = true;
     status.desktop_window_blocked = true;
+#endif
+
+#if defined(SHADPS4_IOS_MOLTENVK_ICD_PACKAGED)
+    status.moltenvk_icd_packaged = true;
+#endif
+
+#if defined(SHADPS4_IOS_MOLTENVK_RUNTIME_LINKED)
+    status.moltenvk_runtime_linked = true;
 #endif
 
 #if !defined(__x86_64__) && !defined(_M_X64)
@@ -47,7 +56,7 @@ AppleRuntimeReuseStatus QueryAppleRuntimeReuseStatus() {
         status.summary = "Apple Silicon path detected; macOS ARM code can guide the iPadOS port.";
         status.reusable =
             "Reusable now: Apple arm64 build flags, shared C++ state surfaces, controller mapping ideas, "
-            "and the Metal/MoltenVK presentation strategy.";
+            "UIKit CAMetalLayer surface, and the Metal/MoltenVK presentation strategy.";
     } else if (status.apple_platform) {
         status.summary = "Apple platform detected, but this build is not arm64.";
         status.reusable = "Reusable now: Apple platform guards and shared C++ core surfaces.";
@@ -58,10 +67,42 @@ AppleRuntimeReuseStatus QueryAppleRuntimeReuseStatus() {
 
     status.blocker =
         "Not reusable directly yet: the desktop SDL window, macOS app lifecycle, bundled MoltenVK dylib "
-        "layout, and x86/xbyak CPU backend. iPadOS needs a UIKit/CAMetalLayer presenter plus an ARM64 "
-        "JIT path supplied through the external JIT workflow.";
+        "layout, and x86/xbyak CPU backend. iPadOS still needs MoltenVK runtime linkage and a PS4 "
+        "x86_64-to-ARM64 dynarec backend after SideStore opens executable memory.";
 
     return status;
+}
+
+EmulatorCoreStatus QueryRendererSurfaceStatus(bool has_metal_layer, bool has_metal_device) {
+    if (!has_metal_layer) {
+        return {
+            .bridge_linked = true,
+            .state_core_linked = true,
+            .full_emulator_linked = false,
+            .summary = "UIKit renderer surface is not attached.",
+            .blocker = "The app did not expose a CAMetalLayer for the renderer.",
+        };
+    }
+
+    if (!has_metal_device) {
+        return {
+            .bridge_linked = true,
+            .state_core_linked = true,
+            .full_emulator_linked = false,
+            .summary = "CAMetalLayer is attached, but Metal device creation failed.",
+            .blocker = "The iPad must provide a Metal-capable GPU before MoltenVK can present.",
+        };
+    }
+
+    return {
+        .bridge_linked = true,
+        .state_core_linked = true,
+        .full_emulator_linked = false,
+        .summary = "UIKit CAMetalLayer renderer surface is ready.",
+        .blocker =
+            "Renderer surface is ready; next blocker is connecting Vulkan/MoltenVK presenter and the "
+            "ARM64 dynarec backend to Core::Emulator::Run.",
+    };
 }
 
 EmulatorCoreStatus PrepareEmulatorCoreLaunch(const EmulatorCoreLaunchRequest& request) {
