@@ -236,12 +236,24 @@ if(NOT (GIT_REMOTE_URL_LOWER MATCHES "shadps4-emu/shadps4" AND (GIT_BRANCH STREQ
 endif()
 
 if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
+    set(IOS_SMOKE_ASSETS src/platform/ios_smoke/Assets.xcassets)
+    file(GLOB IOS_SMOKE_ICON_FILES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/ios_smoke/Assets.xcassets/AppIcon.appiconset/*.png"
+    )
+    set_source_files_properties(${IOS_SMOKE_ASSETS} ${IOS_SMOKE_ICON_FILES}
+        PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
     add_executable(shadps4-ios-smoke MACOSX_BUNDLE
         src/platform/ios_smoke/main.mm
         src/core/platform/ios_device_policy.h
         src/core/platform/ios_device_policy.mm
+        src/core/platform/ios_emulator_core_bridge.cpp
+        src/core/platform/ios_emulator_core_bridge.h
+        src/core/emulator_state.cpp
+        src/core/emulator_state.h
         src/core/jit/external_jit_bridge.cpp
         src/core/jit/external_jit_bridge.h
+        ${IOS_SMOKE_ASSETS}
+        ${IOS_SMOKE_ICON_FILES}
     )
     target_include_directories(shadps4-ios-smoke PRIVATE src)
     target_compile_definitions(shadps4-ios-smoke PRIVATE
@@ -260,6 +272,7 @@ if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
         XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
         XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
         XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "18.0"
+        XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
     )
     return()
 endif()

@@ -8,6 +8,7 @@
 #include <sstream>
 
 #include "core/jit/external_jit_bridge.h"
+#include "core/platform/ios_emulator_core_bridge.h"
 #include "core/platform/ios_device_policy.h"
 
 namespace {
@@ -235,6 +236,7 @@ UIStackView* MakeVerticalStack(NSArray<UIView*>* views, CGFloat spacing) {
 @property(nonatomic, strong) StatusCard* jitCard;
 @property(nonatomic, strong) StatusCard* renderCard;
 @property(nonatomic, strong) StatusCard* deviceCard;
+@property(nonatomic, strong) StatusCard* coreCard;
 @property(nonatomic, strong) NSURL* selectedGameURL;
 @property(nonatomic, assign) BOOL selectedURLNeedsStopAccessing;
 @end
@@ -345,9 +347,10 @@ UIStackView* MakeVerticalStack(NSArray<UIView*>* views, CGFloat spacing) {
     self.jitCard = [[StatusCard alloc] initWithTitle:@"External JIT" value:@"Not detected" color:Color(0.95, 0.54, 0.25)];
     self.renderCard = [[StatusCard alloc] initWithTitle:@"Resolution" value:@"900p" color:Color(0.38, 0.72, 0.48)];
     self.deviceCard = [[StatusCard alloc] initWithTitle:@"Device Policy" value:@"Checking" color:Color(0.50, 0.58, 0.96)];
+    self.coreCard = [[StatusCard alloc] initWithTitle:@"Core Bridge" value:@"Checking" color:Color(0.74, 0.52, 0.96)];
 
     UIStackView* cardRow = [[UIStackView alloc] initWithArrangedSubviews:@[
-        self.gameCard, self.jitCard, self.renderCard, self.deviceCard
+        self.gameCard, self.jitCard, self.renderCard, self.deviceCard, self.coreCard
     ]];
     cardRow.translatesAutoresizingMaskIntoConstraints = NO;
     cardRow.axis = UILayoutConstraintAxisHorizontal;
@@ -517,6 +520,8 @@ UIStackView* MakeVerticalStack(NSArray<UIView*>* views, CGFloat spacing) {
     const auto jitStatus = Core::JIT::QueryExternalJitStatus();
     [self.deviceCard setValue:SupportTierText(policy.tier)];
     [self.jitCard setValue:jitStatus.available ? @"Ready" : @"Not detected"];
+    const auto coreStatus = Core::IOSPort::QueryEmulatorCoreStatus();
+    [self.coreCard setValue:coreStatus.state_core_linked ? @"State linked" : @"Bridge only"];
     self.launchButton.enabled = self.selectedGameURL != nil;
     self.launchButton.alpha = self.launchButton.enabled ? 1.0 : 0.55;
 }
@@ -592,16 +597,25 @@ UIStackView* MakeVerticalStack(NSArray<UIView*>* views, CGFloat spacing) {
     }
 
     const auto jitStatus = Core::JIT::QueryExternalJitStatus();
+    Core::IOSPort::EmulatorCoreLaunchRequest request{
+        .game_path = self.selectedGameURL.path.UTF8String ?: "",
+        .resolution_name = self.resolutionControl.selectedSegmentIndex == 0 ? "720p" : "900p",
+        .resolution_width = self.resolutionControl.selectedSegmentIndex == 0 ? 1280U : 1600U,
+        .resolution_height = self.resolutionControl.selectedSegmentIndex == 0 ? 720U : 900U,
+        .external_jit_available = jitStatus.available,
+        .enforce_device_policy = self.deviceGuardSwitch.on,
+    };
+    const auto coreStatus = Core::IOSPort::PrepareEmulatorCoreLaunch(request);
     if (!jitStatus.available) {
-        [self appendLog:@"Status: blocked. External JIT provider is not detected."];
+        [self appendLog:ToNSString("Status: " + coreStatus.blocker)];
         [self showAlertWithTitle:@"External JIT required"
                          message:@"The iOS port can select a game now, but emulation cannot start until an external JIT provider is attached."];
         return;
     }
 
-    [self appendLog:@"Status: runtime ready, emulator core is not linked into the iOS target yet."];
-    [self showAlertWithTitle:@"Core not linked yet"
-                     message:@"Device, game path, resolution, and JIT checks passed. The next porting step is linking the shadPS4 emulator core into this iOS app target."];
+    [self appendLog:ToNSString("Status: " + coreStatus.summary)];
+    [self showAlertWithTitle:@"Core bridge linked"
+                     message:ToNSString(coreStatus.blocker)];
 }
 
 - (void)showAlertWithTitle:(NSString*)title message:(NSString*)message {
