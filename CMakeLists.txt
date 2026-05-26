@@ -44,6 +44,10 @@ option(ENABLE_UPDATER "Enables the options to updater" ON)
 option(ENABLE_TESTS "Build unit tests (requires GTest)" OFF)
 option(SHADPS4_ENABLE_EXTERNAL_JIT_BRIDGE "Enable the external JIT readiness bridge" ON)
 option(SHADPS4_IOS_BUILD_SMOKE_APP "Build the iOS/iPadOS smoke-test app instead of the desktop CLI" ON)
+set(SHADPS4_IOS_MOLTENVK_XCFRAMEWORK "" CACHE PATH "Path to an iOS MoltenVK.xcframework")
+set(SHADPS4_IOS_MOLTENVK_FRAMEWORK "" CACHE PATH "Path to an iOS MoltenVK.framework")
+set(SHADPS4_IOS_MOLTENVK_DYLIB "" CACHE FILEPATH "Path to an iOS libMoltenVK.dylib")
+set(SHADPS4_IOS_MOLTENVK_STATIC "" CACHE FILEPATH "Path to an iOS libMoltenVK.a")
 
 if(SHADPS4_IOS_PORT)
     set(ENABLE_DISCORD_RPC OFF CACHE BOOL "Discord RPC is not supported by the iOS/iPadOS port" FORCE)
@@ -238,12 +242,53 @@ endif()
 if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
     set(IOS_SMOKE_ASSETS src/platform/ios_smoke/Assets.xcassets)
     set(IOS_MOLTENVK_ICD "${CMAKE_CURRENT_SOURCE_DIR}/externals/MoltenVK/MoltenVK/icd/MoltenVK_icd.json")
+    set(IOS_MOLTENVK_RUNTIME "")
+    set(IOS_MOLTENVK_RUNTIME_KIND "")
+    foreach(candidate
+            "${SHADPS4_IOS_MOLTENVK_XCFRAMEWORK}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/externals/MoltenVK/MoltenVK.xcframework"
+            "${CMAKE_CURRENT_SOURCE_DIR}/externals/MoltenVK/MoltenVK/MoltenVK.xcframework")
+        if(candidate AND EXISTS "${candidate}" AND NOT IOS_MOLTENVK_RUNTIME)
+            set(IOS_MOLTENVK_RUNTIME "${candidate}")
+            set(IOS_MOLTENVK_RUNTIME_KIND "xcframework")
+        endif()
+    endforeach()
+    foreach(candidate
+            "${SHADPS4_IOS_MOLTENVK_FRAMEWORK}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/externals/MoltenVK/MoltenVK.framework"
+            "${CMAKE_CURRENT_SOURCE_DIR}/externals/MoltenVK/MoltenVK/MoltenVK.framework")
+        if(candidate AND EXISTS "${candidate}" AND NOT IOS_MOLTENVK_RUNTIME)
+            set(IOS_MOLTENVK_RUNTIME "${candidate}")
+            set(IOS_MOLTENVK_RUNTIME_KIND "framework")
+        endif()
+    endforeach()
+    foreach(candidate
+            "${SHADPS4_IOS_MOLTENVK_DYLIB}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/externals/MoltenVK/libMoltenVK.dylib"
+            "${CMAKE_CURRENT_SOURCE_DIR}/externals/MoltenVK/MoltenVK/libMoltenVK.dylib")
+        if(candidate AND EXISTS "${candidate}" AND NOT IOS_MOLTENVK_RUNTIME)
+            set(IOS_MOLTENVK_RUNTIME "${candidate}")
+            set(IOS_MOLTENVK_RUNTIME_KIND "dylib")
+        endif()
+    endforeach()
+    foreach(candidate
+            "${SHADPS4_IOS_MOLTENVK_STATIC}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/externals/MoltenVK/libMoltenVK.a"
+            "${CMAKE_CURRENT_SOURCE_DIR}/externals/MoltenVK/MoltenVK/libMoltenVK.a")
+        if(candidate AND EXISTS "${candidate}" AND NOT IOS_MOLTENVK_RUNTIME)
+            set(IOS_MOLTENVK_RUNTIME "${candidate}")
+            set(IOS_MOLTENVK_RUNTIME_KIND "static")
+        endif()
+    endforeach()
     file(GLOB IOS_SMOKE_ICON_FILES CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/ios_smoke/Assets.xcassets/AppIcon.appiconset/*.png"
     )
     set(IOS_SMOKE_RESOURCES ${IOS_SMOKE_ASSETS} ${IOS_SMOKE_ICON_FILES})
     if(EXISTS "${IOS_MOLTENVK_ICD}")
         list(APPEND IOS_SMOKE_RESOURCES "${IOS_MOLTENVK_ICD}")
+    endif()
+    if(IOS_MOLTENVK_RUNTIME_KIND STREQUAL "framework" OR IOS_MOLTENVK_RUNTIME_KIND STREQUAL "dylib")
+        list(APPEND IOS_SMOKE_RESOURCES "${IOS_MOLTENVK_RUNTIME}")
     endif()
     set_source_files_properties(${IOS_SMOKE_RESOURCES}
         PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
@@ -253,8 +298,12 @@ if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
         src/core/platform/ios_device_policy.mm
         src/core/platform/ios_emulator_core_bridge.cpp
         src/core/platform/ios_emulator_core_bridge.h
+        src/core/platform/ios_moltenvk_runtime.cpp
+        src/core/platform/ios_moltenvk_runtime.h
         src/core/emulator_state.cpp
         src/core/emulator_state.h
+        src/core/jit/arm64_dynarec_backend.cpp
+        src/core/jit/arm64_dynarec_backend.h
         src/core/jit/external_jit_bridge.cpp
         src/core/jit/external_jit_bridge.h
         ${IOS_SMOKE_RESOURCES}
@@ -266,6 +315,10 @@ if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
     )
     if(EXISTS "${IOS_MOLTENVK_ICD}")
         target_compile_definitions(shadps4-ios-smoke PRIVATE SHADPS4_IOS_MOLTENVK_ICD_PACKAGED=1)
+    endif()
+    if(IOS_MOLTENVK_RUNTIME)
+        target_compile_definitions(shadps4-ios-smoke PRIVATE SHADPS4_IOS_MOLTENVK_RUNTIME_LINKED=1)
+        target_link_libraries(shadps4-ios-smoke PRIVATE "${IOS_MOLTENVK_RUNTIME}")
     endif()
     target_link_libraries(shadps4-ios-smoke PRIVATE
         "-framework CoreGraphics"

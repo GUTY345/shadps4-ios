@@ -13,6 +13,7 @@
 #include "core/jit/external_jit_bridge.h"
 #include "core/platform/ios_emulator_core_bridge.h"
 #include "core/platform/ios_device_policy.h"
+#include "core/platform/ios_moltenvk_runtime.h"
 
 namespace {
 
@@ -946,13 +947,15 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     const auto coreStatus = Core::IOSPort::QueryEmulatorCoreStatus();
     [self.coreCard setValue:coreStatus.state_core_linked ? @"State linked" : @"Bridge only"];
     const auto appleStatus = Core::IOSPort::QueryAppleRuntimeReuseStatus();
+    const auto moltenvkStatus = Core::IOSPort::QueryMoltenVKRuntimeStatus();
     self.appleRuntimeLabel.text =
-        [NSString stringWithFormat:@"%@\n%@\nMoltenVK ICD: %@ / runtime: %@\nBlocked: %@",
+        [NSString stringWithFormat:@"%@\n%@\nMoltenVK ICD: %@ / runtime: %@\nProvider: %@\nBlocked: %@",
                                    ToNSString(appleStatus.summary),
                                    ToNSString(appleStatus.reusable),
-                                   appleStatus.moltenvk_icd_packaged ? @"packaged" : @"missing",
-                                   appleStatus.moltenvk_runtime_linked ? @"linked" : @"not linked",
-                                   ToNSString(appleStatus.blocker)];
+                                   moltenvkStatus.icd_packaged ? @"packaged" : @"missing",
+                                   moltenvkStatus.runtime_loadable ? @"loadable" : @"not loadable",
+                                   ToNSString(moltenvkStatus.provider),
+                                   ToNSString(moltenvkStatus.blocker)];
     [self.metalSurfaceView renderDiagnosticFrame];
     const auto rendererStatus = Core::IOSPort::QueryRendererSurfaceStatus(
         self.metalSurfaceView.metalLayer != nil, self.metalSurfaceView.device != nil);
@@ -961,10 +964,12 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
                                    ToNSString(rendererStatus.blocker)];
     const auto dynarecStatus = Core::JIT::QueryArm64DynarecStatus();
     self.dynarecLabel.text =
-        [NSString stringWithFormat:@"%@\nSideStore JIT: %@ / backend: %@\nBlocked: %@",
+        [NSString stringWithFormat:@"%@\nSideStore JIT: %@ / backend: %@ / validation: %@ / translator: %@\nBlocked: %@",
                                    ToNSString(dynarecStatus.summary),
                                    dynarecStatus.external_jit_available ? @"ready" : @"waiting",
                                    dynarecStatus.dynarec_backend_linked ? @"linked" : @"not linked",
+                                   dynarecStatus.validation_stub_ran ? @"passed" : @"not run",
+                                   dynarecStatus.guest_translator_ready ? @"ready" : @"not ready",
                                    ToNSString(dynarecStatus.blocker)];
     [self refreshControllerState];
     self.launchButton.enabled = self.selectedGameURL != nil;
@@ -1212,9 +1217,17 @@ NSDictionary<NSString*, NSString*>* ReadParamSfo(NSURL* paramURL) {
     }
 
     const auto dynarecStatus = Core::JIT::QueryArm64DynarecStatus();
-    if (!dynarecStatus.dynarec_backend_linked) {
+    if (!Core::JIT::PrepareArm64Dynarec()) {
         [self appendLog:ToNSString("Status: " + dynarecStatus.blocker)];
-        [self showAlertWithTitle:@"ARM64 dynarec not linked" message:ToNSString(dynarecStatus.blocker)];
+        [self showAlertWithTitle:@"ARM64 dynarec not ready" message:ToNSString(dynarecStatus.blocker)];
+        return;
+    }
+
+    const auto preparedDynarecStatus = Core::JIT::QueryArm64DynarecStatus();
+    if (!preparedDynarecStatus.guest_translator_ready) {
+        [self appendLog:@"Status: ARM64 executable stub is ready; PS4 x86_64 translator is not ready yet."];
+        [self showAlertWithTitle:@"PS4 CPU translator not ready"
+                         message:@"The ARM64 executable code path is linked, but the full PS4 x86_64-to-ARM64 instruction translator still has to be implemented before games can boot."];
         return;
     }
 

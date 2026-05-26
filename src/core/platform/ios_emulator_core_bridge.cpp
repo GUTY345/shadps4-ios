@@ -4,6 +4,7 @@
 #include "core/platform/ios_emulator_core_bridge.h"
 
 #include "core/emulator_state.h"
+#include "core/platform/ios_moltenvk_runtime.h"
 
 namespace Core::IOSPort {
 
@@ -40,13 +41,9 @@ AppleRuntimeReuseStatus QueryAppleRuntimeReuseStatus() {
     status.desktop_window_blocked = true;
 #endif
 
-#if defined(SHADPS4_IOS_MOLTENVK_ICD_PACKAGED)
-    status.moltenvk_icd_packaged = true;
-#endif
-
-#if defined(SHADPS4_IOS_MOLTENVK_RUNTIME_LINKED)
-    status.moltenvk_runtime_linked = true;
-#endif
+    const auto moltenvk = QueryMoltenVKRuntimeStatus();
+    status.moltenvk_icd_packaged = moltenvk.icd_packaged;
+    status.moltenvk_runtime_linked = moltenvk.runtime_linked || moltenvk.runtime_loadable;
 
 #if !defined(__x86_64__) && !defined(_M_X64)
     status.x86_dynarec_blocked = true;

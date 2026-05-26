@@ -51,8 +51,21 @@ The current smoke app creates a real `CAMetalLayer`, attaches a Metal device,
 and clears a diagnostic drawable. That proves the iPadOS app has a presenter
 surface that can later be handed to MoltenVK or a future Metal renderer shim.
 
-The remaining renderer work is to package/link an iOS MoltenVK runtime binary
-and pass the UIKit `CAMetalLayer` into the Vulkan presenter path used by
+The smoke target now has CMake wiring and runtime checks for an iOS MoltenVK
+runtime. It can consume a `MoltenVK.xcframework`, `MoltenVK.framework`,
+`libMoltenVK.dylib`, or `libMoltenVK.a` via these cache variables:
+
+```sh
+-DSHADPS4_IOS_MOLTENVK_XCFRAMEWORK=/path/to/MoltenVK.xcframework
+-DSHADPS4_IOS_MOLTENVK_FRAMEWORK=/path/to/MoltenVK.framework
+-DSHADPS4_IOS_MOLTENVK_DYLIB=/path/to/libMoltenVK.dylib
+-DSHADPS4_IOS_MOLTENVK_STATIC=/path/to/libMoltenVK.a
+```
+
+If a runtime is present, the smoke app defines
+`SHADPS4_IOS_MOLTENVK_RUNTIME_LINKED` and the runtime panel reports whether the
+binary is loadable. The remaining renderer work is to pass the UIKit
+`CAMetalLayer` into the Vulkan presenter path used by
 `video_core/renderer_vulkan/vk_platform.cpp`.
 
 ## ARM64 dynarec and SideStore JIT gate
@@ -61,13 +74,19 @@ and pass the UIKit `CAMetalLayer` into the Vulkan presenter path used by
 gate. The gate checks that the app is running as arm64 and that SideStore or
 another external workflow has opened executable memory.
 
-This does not implement the PS4 x86_64-to-ARM64 translator yet. It gives the CPU
-backend a strict contract:
+`src/core/jit/arm64_dynarec_backend.*` adds the first backend module for iOS. It
+allocates an executable page, emits a tiny ARM64 validation stub, flushes the
+instruction cache, and executes that stub after SideStore reports JIT readiness.
+That proves the process can run generated ARM64 code on device.
+
+This does not implement the full PS4 x86_64-to-ARM64 translator yet. It gives
+the CPU backend a strict contract:
 
 1. SideStore must enable JIT for the app process.
 2. `QueryArm64DynarecStatus()` must report executable memory readiness.
-3. A future ARM64 dynarec backend can provide `shadps4_arm64_dynarec_prepare()`
-   before the emulator enters translated CPU execution.
+3. `PrepareArm64Dynarec()` must successfully run the ARM64 validation stub.
+4. A future translator must decode PS4 x86_64 basic blocks, lower them to ARM64,
+   and mark `guest_translator_ready` before games can boot.
 
 ## Configure sketch
 
@@ -112,10 +131,11 @@ provisioning profile for `dev.guty345.shadps4-ios-smoke`.
 
 Next porting steps:
 
-1. Add an iOS MoltenVK runtime binary or xcframework to the app bundle/link step.
+1. Add an actual iOS MoltenVK runtime binary or xcframework to the configured
+   path if one is not already present locally.
 2. Pass the UIKit `CAMetalLayer` into the Vulkan presenter and create a
    `VK_EXT_metal_surface` surface on device.
-3. Implement or port a PS4 x86_64-to-ARM64 dynarec backend behind the SideStore
-   JIT gate.
+3. Build the x86_64 decoder, register model, memory callbacks, and ARM64 block
+   emitter behind the SideStore JIT gate.
 4. Start loading real dumped game content only after renderer, sysmodule, and
    CPU execution paths are connected.

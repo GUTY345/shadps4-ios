@@ -137,7 +137,10 @@ Implemented in this branch:
 - Apple Runtime status panel for tracking which macOS ARM pieces can be reused
 - UIKit-owned `CAMetalLayer` renderer surface with a Metal diagnostic clear
 - MoltenVK ICD resource packaging when the upstream ICD file is present
-- ARM64 dynarec readiness gate tied to external SideStore JIT status
+- MoltenVK runtime loader and CMake wiring for `.xcframework`, `.framework`,
+  `.dylib`, or `.a` iOS builds
+- ARM64 dynarec backend skeleton tied to external SideStore JIT status
+- ARM64 executable-code validation stub for testing JIT pages on device
 - SDL Metal surface path extended for iOS
 - Port notes in `docs/ios-ipados-port.md`
 
@@ -146,10 +149,19 @@ Still needed:
 - iOS MoltenVK runtime binary or xcframework linkage
 - On-device Vulkan presenter validation through `VK_EXT_metal_surface`
 - Touch overlay input for playing without a hardware controller
-- PS4 x86_64-to-ARM64 dynarec backend integration
+- Full PS4 x86_64 instruction decoder and ARM64 block translator
 - External JIT provider integration beyond readiness detection
 - Real game boot path after renderer, sysmodule, and CPU execution paths are
   connected
+
+To link an iOS MoltenVK runtime, configure with one of these paths:
+
+```sh
+-DSHADPS4_IOS_MOLTENVK_XCFRAMEWORK=/path/to/MoltenVK.xcframework
+-DSHADPS4_IOS_MOLTENVK_FRAMEWORK=/path/to/MoltenVK.framework
+-DSHADPS4_IOS_MOLTENVK_DYLIB=/path/to/libMoltenVK.dylib
+-DSHADPS4_IOS_MOLTENVK_STATIC=/path/to/libMoltenVK.a
+```
 
 ## macOS ARM Reuse
 

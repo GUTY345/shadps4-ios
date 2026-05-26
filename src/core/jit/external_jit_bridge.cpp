@@ -3,6 +3,8 @@
 
 #include "core/jit/external_jit_bridge.h"
 
+#include "core/jit/arm64_dynarec_backend.h"
+
 #include <cstdlib>
 #include <string_view>
 
@@ -74,6 +76,7 @@ bool PrepareExternalJit() {
 
 Arm64DynarecStatus QueryArm64DynarecStatus() {
     const auto jit_status = QueryExternalJitStatus();
+    const auto backend_status = ARM64::QueryBackendStatus(jit_status.available);
     Arm64DynarecStatus status{
 #if defined(__arm64__) || defined(__aarch64__)
         .arm64_build = true,
@@ -81,8 +84,10 @@ Arm64DynarecStatus QueryArm64DynarecStatus() {
         .arm64_build = false,
 #endif
         .external_jit_available = jit_status.available,
-        .dynarec_backend_linked = false,
-        .executable_memory_ready = jit_status.available,
+        .dynarec_backend_linked = backend_status.backend_linked,
+        .executable_memory_ready = backend_status.executable_memory_ready,
+        .validation_stub_ran = backend_status.validation_stub_ran,
+        .guest_translator_ready = backend_status.guest_translator_ready,
     };
 
     if (!status.arm64_build) {
@@ -97,9 +102,8 @@ Arm64DynarecStatus QueryArm64DynarecStatus() {
         return status;
     }
 
-    status.summary = "SideStore JIT gate is open for ARM64 executable memory.";
-    status.blocker =
-        "The executable-memory gate is ready, but the PS4 x86_64-to-ARM64 dynarec backend is not linked yet.";
+    status.summary = backend_status.summary;
+    status.blocker = backend_status.blocker;
     return status;
 }
 
@@ -115,7 +119,9 @@ bool PrepareArm64Dynarec() {
     }
 #endif
 
-    return QueryArm64DynarecStatus().dynarec_backend_linked;
+    const auto jit_status = QueryExternalJitStatus();
+    const auto backend_status = ARM64::PrepareBackend(jit_status.available);
+    return backend_status.backend_linked && backend_status.validation_stub_ran;
 }
 
 } // namespace Core::JIT

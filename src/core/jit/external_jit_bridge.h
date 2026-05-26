@@ -17,6 +17,8 @@ struct Arm64DynarecStatus {
     bool external_jit_available;
     bool dynarec_backend_linked;
     bool executable_memory_ready;
+    bool validation_stub_ran;
+    bool guest_translator_ready;
     std::string summary;
     std::string blocker;
 };
