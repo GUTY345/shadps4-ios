@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #import <UIKit/UIKit.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include <iomanip>
 #include <sstream>
@@ -15,48 +16,20 @@ NSString* ToNSString(const std::string& value) {
     return [NSString stringWithUTF8String:value.c_str()];
 }
 
-NSString* FormatDevicePolicy() {
-    const auto policy = Core::IOSPort::QueryDevicePolicy();
-    const auto resolution = Core::IOSPort::ClampResolution(1600, 900);
-    const auto jit_status = Core::JIT::QueryExternalJitStatus();
-    const double ram_gib =
-        static_cast<double>(policy.physical_memory_bytes) / (1024.0 * 1024.0 * 1024.0);
-
-    std::ostringstream out;
-    out << "shadPS4 iOS smoke test\n";
-    out << "----------------------\n";
-    out << "Device: " << policy.machine_identifier << "\n";
-    out << "OS: " << policy.os_major_version << "." << policy.os_minor_version << "."
-        << policy.os_patch_version << "\n";
-    out << "iPad: " << (policy.is_ipad ? "yes" : "no") << "\n";
-    out << "M-series policy: " << (policy.is_ipad_m1_or_newer ? "pass" : "not required") << "\n";
-    out << "OS policy: " << (policy.os_version_supported ? "pass" : "fail") << "\n";
-    out << "RAM detected: " << std::fixed << std::setprecision(2) << ram_gib
-        << " GiB (8 GB class)\n";
-    out << "Support: ";
-    switch (policy.tier) {
+NSString* SupportTierText(Core::IOSPort::SupportTier tier) {
+    switch (tier) {
     case Core::IOSPort::SupportTier::Recommended:
-        out << "recommended";
-        break;
+        return @"recommended";
     case Core::IOSPort::SupportTier::Minimum:
-        out << "minimum";
-        break;
+        return @"minimum";
     case Core::IOSPort::SupportTier::Unsupported:
-        out << "unsupported";
-        break;
+        return @"unsupported";
     }
-    out << "\nReason: " << policy.reason << "\n";
-    out << "Resolution: " << resolution.name << " (" << resolution.width << "x" << resolution.height
-        << ")\n";
-    out << "External JIT: " << (jit_status.available ? "ready" : "not detected") << " ("
-        << jit_status.provider << ")\n";
-
-    return ToNSString(out.str());
+    return @"unknown";
 }
 
-NSString* FormatHeroStatus() {
+NSString* FormatDeviceSummary() {
     const auto policy = Core::IOSPort::QueryDevicePolicy();
-    const auto jit_status = Core::JIT::QueryExternalJitStatus();
     const double ram_gib =
         static_cast<double>(policy.physical_memory_bytes) / (1024.0 * 1024.0 * 1024.0);
 
@@ -64,9 +37,7 @@ NSString* FormatHeroStatus() {
     out << policy.machine_identifier << " • iPadOS " << policy.os_major_version << "."
         << policy.os_minor_version << " • " << std::fixed << std::setprecision(1) << ram_gib
         << " GiB";
-    out << "\nPolicy: " << (policy.tier == Core::IOSPort::SupportTier::Unsupported ? "Blocked"
-                                                                                    : "Ready");
-    out << " • External JIT: " << (jit_status.available ? "Ready" : "Not detected");
+    out << "\nPolicy: " << [SupportTierText(policy.tier) UTF8String] << " • " << policy.reason;
     return ToNSString(out.str());
 }
 
@@ -92,50 +63,72 @@ UIButton* MakeCommandButton(NSString* title, UIColor* background) {
     return button;
 }
 
-UIView* MakeStatusCard(NSString* title, NSString* value) {
-    UIView* card = [[UIView alloc] initWithFrame:CGRectMake(0.0, 0.0, 0.0, 0.0)];
-    card.translatesAutoresizingMaskIntoConstraints = NO;
-    card.backgroundColor = [UIColor colorWithRed:0.10 green:0.12 blue:0.16 alpha:1.0];
-    card.layer.cornerRadius = 8.0;
+} // namespace
+
+@interface StatusCard : UIView
+@property(nonatomic, strong) UILabel* valueLabel;
+- (instancetype)initWithTitle:(NSString*)title value:(NSString*)value;
+- (void)setValue:(NSString*)value;
+@end
+
+@implementation StatusCard
+
+- (instancetype)initWithTitle:(NSString*)title value:(NSString*)value {
+    self = [super initWithFrame:CGRectMake(0.0, 0.0, 0.0, 0.0)];
+    if (self == nil) {
+        return nil;
+    }
+
+    self.translatesAutoresizingMaskIntoConstraints = NO;
+    self.backgroundColor = [UIColor colorWithRed:0.10 green:0.12 blue:0.16 alpha:1.0];
+    self.layer.cornerRadius = 8.0;
 
     UILabel* titleLabel =
         MakeLabel(title, 13.0, UIFontWeightMedium, [UIColor colorWithRed:0.62 green:0.68 blue:0.78 alpha:1.0]);
-    UILabel* valueLabel =
-        MakeLabel(value, 20.0, UIFontWeightSemibold, [UIColor colorWithRed:0.95 green:0.97 blue:1.0 alpha:1.0]);
+    self.valueLabel =
+        MakeLabel(value, 19.0, UIFontWeightSemibold, [UIColor colorWithRed:0.95 green:0.97 blue:1.0 alpha:1.0]);
 
-    UIStackView* stack = [[UIStackView alloc] initWithArrangedSubviews:@[ titleLabel, valueLabel ]];
+    UIStackView* stack = [[UIStackView alloc] initWithArrangedSubviews:@[ titleLabel, self.valueLabel ]];
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     stack.axis = UILayoutConstraintAxisVertical;
     stack.spacing = 6.0;
-    [card addSubview:stack];
+    [self addSubview:stack];
 
     [NSLayoutConstraint activateConstraints:@[
-        [stack.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:16.0],
-        [stack.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-16.0],
-        [stack.topAnchor constraintEqualToAnchor:card.topAnchor constant:14.0],
-        [stack.bottomAnchor constraintEqualToAnchor:card.bottomAnchor constant:-14.0],
-        [card.heightAnchor constraintGreaterThanOrEqualToConstant:88.0]
+        [stack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:16.0],
+        [stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-16.0],
+        [stack.topAnchor constraintEqualToAnchor:self.topAnchor constant:14.0],
+        [stack.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-14.0],
+        [self.heightAnchor constraintGreaterThanOrEqualToConstant:88.0]
     ]];
-    return card;
+    return self;
 }
 
-} // namespace
+- (void)setValue:(NSString*)value {
+    self.valueLabel.text = value;
+}
 
-@interface ShadPS4SmokeAppDelegate : UIResponder <UIApplicationDelegate>
-@property(strong, nonatomic) UIWindow* window;
 @end
 
-@implementation ShadPS4SmokeAppDelegate
+@interface ShadPS4ViewController : UIViewController <UIDocumentPickerDelegate>
+@property(nonatomic, strong) UILabel* titleLabel;
+@property(nonatomic, strong) UILabel* detailLabel;
+@property(nonatomic, strong) UILabel* gameLabel;
+@property(nonatomic, strong) UILabel* logLabel;
+@property(nonatomic, strong) UIButton* launchButton;
+@property(nonatomic, strong) UISegmentedControl* resolutionControl;
+@property(nonatomic, strong) StatusCard* gameCard;
+@property(nonatomic, strong) StatusCard* jitCard;
+@property(nonatomic, strong) StatusCard* renderCard;
+@property(nonatomic, strong) NSURL* selectedGameURL;
+@property(nonatomic, assign) BOOL selectedURLNeedsStopAccessing;
+@end
 
-- (BOOL)application:(UIApplication*)application
-    didFinishLaunchingWithOptions:(NSDictionary*)launchOptions {
-    (void)application;
-    (void)launchOptions;
+@implementation ShadPS4ViewController
 
-    self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
-
-    UIViewController* controller = [[UIViewController alloc] init];
-    controller.view.backgroundColor = [UIColor colorWithRed:0.04 green:0.05 blue:0.07 alpha:1.0];
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor colorWithRed:0.04 green:0.05 blue:0.07 alpha:1.0];
 
     UIView* sidebar = [[UIView alloc] initWithFrame:CGRectMake(0.0, 0.0, 0.0, 0.0)];
     sidebar.translatesAutoresizingMaskIntoConstraints = NO;
@@ -145,12 +138,16 @@ UIView* MakeStatusCard(NSString* title, NSString* value) {
         MakeLabel(@"shadPS4", 34.0, UIFontWeightBold, [UIColor colorWithRed:0.96 green:0.98 blue:1.0 alpha:1.0]);
     UILabel* subtitle = MakeLabel(@"iOS / iPadOS Port", 14.0, UIFontWeightMedium,
                                   [UIColor colorWithRed:0.56 green:0.64 blue:0.76 alpha:1.0]);
+
     UIButton* libraryButton =
         MakeCommandButton(@"Game Library", [UIColor colorWithRed:0.16 green:0.22 blue:0.32 alpha:1.0]);
     UIButton* settingsButton =
         MakeCommandButton(@"Settings", [UIColor colorWithRed:0.12 green:0.15 blue:0.21 alpha:1.0]);
     UIButton* logsButton =
         MakeCommandButton(@"Logs", [UIColor colorWithRed:0.12 green:0.15 blue:0.21 alpha:1.0]);
+    [libraryButton addTarget:self action:@selector(openGamePicker) forControlEvents:UIControlEventTouchUpInside];
+    [settingsButton addTarget:self action:@selector(showSettingsSummary) forControlEvents:UIControlEventTouchUpInside];
+    [logsButton addTarget:self action:@selector(showLogsSummary) forControlEvents:UIControlEventTouchUpInside];
 
     UIStackView* sidebarStack =
         [[UIStackView alloc] initWithArrangedSubviews:@[ brand, subtitle, libraryButton, settingsButton, logsButton ]];
@@ -162,61 +159,65 @@ UIView* MakeStatusCard(NSString* title, NSString* value) {
     UIView* content = [[UIView alloc] initWithFrame:CGRectMake(0.0, 0.0, 0.0, 0.0)];
     content.translatesAutoresizingMaskIntoConstraints = NO;
 
-    UILabel* title = MakeLabel(@"Ready for device smoke testing", 28.0, UIFontWeightBold,
-                               [UIColor colorWithRed:0.96 green:0.98 blue:1.0 alpha:1.0]);
-    UILabel* detail = MakeLabel(FormatHeroStatus(), 16.0, UIFontWeightRegular,
-                                [UIColor colorWithRed:0.68 green:0.75 blue:0.86 alpha:1.0]);
+    self.titleLabel = MakeLabel(@"Game Library", 30.0, UIFontWeightBold,
+                                [UIColor colorWithRed:0.96 green:0.98 blue:1.0 alpha:1.0]);
+    self.detailLabel = MakeLabel(FormatDeviceSummary(), 16.0, UIFontWeightRegular,
+                                 [UIColor colorWithRed:0.68 green:0.75 blue:0.86 alpha:1.0]);
 
-    UISegmentedControl* resolutionControl =
-        [[UISegmentedControl alloc] initWithItems:@[ @"720p", @"900p" ]];
-    resolutionControl.translatesAutoresizingMaskIntoConstraints = NO;
-    resolutionControl.selectedSegmentIndex = 1;
+    self.resolutionControl = [[UISegmentedControl alloc] initWithItems:@[ @"720p", @"900p" ]];
+    self.resolutionControl.translatesAutoresizingMaskIntoConstraints = NO;
+    self.resolutionControl.selectedSegmentIndex = 1;
+    [self.resolutionControl addTarget:self
+                               action:@selector(resolutionChanged)
+                     forControlEvents:UIControlEventValueChanged];
 
     UIButton* selectGameButton =
-        MakeCommandButton(@"Select Game Folder", [UIColor colorWithRed:0.06 green:0.45 blue:0.80 alpha:1.0]);
-    UIButton* launchButton =
+        MakeCommandButton(@"Select Game or Folder", [UIColor colorWithRed:0.06 green:0.45 blue:0.80 alpha:1.0]);
+    self.launchButton =
         MakeCommandButton(@"Start Emulation", [UIColor colorWithRed:0.22 green:0.55 blue:0.38 alpha:1.0]);
-    launchButton.enabled = NO;
-    launchButton.alpha = 0.55;
+    [selectGameButton addTarget:self action:@selector(openGamePicker) forControlEvents:UIControlEventTouchUpInside];
+    [self.launchButton addTarget:self action:@selector(startEmulation) forControlEvents:UIControlEventTouchUpInside];
 
-    UIView* deviceCard = MakeStatusCard(@"Device Policy", @"Passed");
-    UIView* jitCard = MakeStatusCard(@"External JIT", @"Not detected");
-    UIView* renderCard = MakeStatusCard(@"Render Path", @"MoltenVK planned");
+    self.gameCard = [[StatusCard alloc] initWithTitle:@"Selected Game" value:@"None"];
+    self.jitCard = [[StatusCard alloc] initWithTitle:@"External JIT" value:@"Not detected"];
+    self.renderCard = [[StatusCard alloc] initWithTitle:@"Resolution" value:@"900p"];
 
-    UILabel* diagnostics = [[UILabel alloc] initWithFrame:CGRectMake(0.0, 0.0, 0.0, 0.0)];
-    diagnostics.translatesAutoresizingMaskIntoConstraints = NO;
-    diagnostics.numberOfLines = 0;
-    diagnostics.textColor = [UIColor colorWithRed:0.78 green:0.83 blue:0.91 alpha:1.0];
-    diagnostics.font = [UIFont monospacedSystemFontOfSize:13.0 weight:UIFontWeightRegular];
-    diagnostics.text = FormatDevicePolicy();
+    self.gameLabel = MakeLabel(@"Choose a PS4 game folder, eboot.bin, or ELF file from Files.",
+                               15.0, UIFontWeightRegular,
+                               [UIColor colorWithRed:0.76 green:0.82 blue:0.90 alpha:1.0]);
+    self.logLabel = MakeLabel(@"Status: waiting for game selection.", 14.0, UIFontWeightRegular,
+                              [UIColor colorWithRed:0.62 green:0.70 blue:0.82 alpha:1.0]);
+    self.logLabel.font = [UIFont monospacedSystemFontOfSize:14.0 weight:UIFontWeightRegular];
 
-    UIStackView* cardRow = [[UIStackView alloc] initWithArrangedSubviews:@[ deviceCard, jitCard, renderCard ]];
+    UIStackView* cardRow =
+        [[UIStackView alloc] initWithArrangedSubviews:@[ self.gameCard, self.jitCard, self.renderCard ]];
     cardRow.translatesAutoresizingMaskIntoConstraints = NO;
     cardRow.axis = UILayoutConstraintAxisHorizontal;
     cardRow.distribution = UIStackViewDistributionFillEqually;
     cardRow.spacing = 14.0;
 
     UIStackView* commandRow =
-        [[UIStackView alloc] initWithArrangedSubviews:@[ selectGameButton, launchButton ]];
+        [[UIStackView alloc] initWithArrangedSubviews:@[ selectGameButton, self.launchButton ]];
     commandRow.translatesAutoresizingMaskIntoConstraints = NO;
     commandRow.axis = UILayoutConstraintAxisHorizontal;
     commandRow.distribution = UIStackViewDistributionFillEqually;
     commandRow.spacing = 14.0;
 
     UIStackView* contentStack = [[UIStackView alloc]
-        initWithArrangedSubviews:@[ title, detail, resolutionControl, cardRow, commandRow, diagnostics ]];
+        initWithArrangedSubviews:@[ self.titleLabel, self.detailLabel, self.resolutionControl,
+                                    cardRow, self.gameLabel, commandRow, self.logLabel ]];
     contentStack.translatesAutoresizingMaskIntoConstraints = NO;
     contentStack.axis = UILayoutConstraintAxisVertical;
     contentStack.spacing = 18.0;
     [content addSubview:contentStack];
 
-    [controller.view addSubview:sidebar];
-    [controller.view addSubview:content];
-    UILayoutGuide* guide = controller.view.safeAreaLayoutGuide;
+    [self.view addSubview:sidebar];
+    [self.view addSubview:content];
+    UILayoutGuide* guide = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
-        [sidebar.leadingAnchor constraintEqualToAnchor:controller.view.leadingAnchor],
-        [sidebar.topAnchor constraintEqualToAnchor:controller.view.topAnchor],
-        [sidebar.bottomAnchor constraintEqualToAnchor:controller.view.bottomAnchor],
+        [sidebar.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [sidebar.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [sidebar.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
         [sidebar.widthAnchor constraintEqualToConstant:250.0],
         [sidebarStack.leadingAnchor constraintEqualToAnchor:sidebar.leadingAnchor constant:24.0],
         [sidebarStack.trailingAnchor constraintEqualToAnchor:sidebar.trailingAnchor constant:-24.0],
@@ -232,7 +233,116 @@ UIView* MakeStatusCard(NSString* title, NSString* value) {
         [contentStack.bottomAnchor constraintLessThanOrEqualToAnchor:content.bottomAnchor constant:-24.0]
     ]];
 
-    self.window.rootViewController = controller;
+    [self refreshRuntimeState];
+}
+
+- (void)refreshRuntimeState {
+    const auto jitStatus = Core::JIT::QueryExternalJitStatus();
+    [self.jitCard setValue:jitStatus.available ? @"Ready" : @"Not detected"];
+    self.launchButton.enabled = self.selectedGameURL != nil;
+    self.launchButton.alpha = self.launchButton.enabled ? 1.0 : 0.55;
+}
+
+- (void)resolutionChanged {
+    NSString* value = self.resolutionControl.selectedSegmentIndex == 0 ? @"720p" : @"900p";
+    [self.renderCard setValue:value];
+    self.logLabel.text = [NSString stringWithFormat:@"Status: resolution set to %@.", value];
+}
+
+- (void)openGamePicker {
+    NSArray<UTType*>* types = @[ UTTypeFolder, UTTypeItem ];
+    UIDocumentPickerViewController* picker =
+        [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:types asCopy:NO];
+    picker.delegate = self;
+    picker.allowsMultipleSelection = NO;
+    picker.modalPresentationStyle = UIModalPresentationFormSheet;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController*)controller
+    didPickDocumentsAtURLs:(NSArray<NSURL*>*)urls {
+    (void)controller;
+    NSURL* url = urls.firstObject;
+    if (url == nil) {
+        return;
+    }
+
+    if (self.selectedURLNeedsStopAccessing && self.selectedGameURL != nil) {
+        [self.selectedGameURL stopAccessingSecurityScopedResource];
+    }
+
+    self.selectedURLNeedsStopAccessing = [url startAccessingSecurityScopedResource];
+    self.selectedGameURL = url;
+
+    NSString* displayName = url.lastPathComponent.length > 0 ? url.lastPathComponent : url.path;
+    [self.gameCard setValue:displayName];
+    self.gameLabel.text = [NSString stringWithFormat:@"Selected path:\n%@", url.path];
+    self.logLabel.text = @"Status: game path selected. Start will validate runtime requirements.";
+    [self refreshRuntimeState];
+}
+
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController*)controller {
+    (void)controller;
+    self.logLabel.text = @"Status: game selection cancelled.";
+}
+
+- (void)startEmulation {
+    if (self.selectedGameURL == nil) {
+        [self showAlertWithTitle:@"No game selected" message:@"Choose a game folder or executable first."];
+        return;
+    }
+
+    const auto policy = Core::IOSPort::QueryDevicePolicy();
+    if (policy.tier == Core::IOSPort::SupportTier::Unsupported) {
+        [self showAlertWithTitle:@"Unsupported device" message:ToNSString(policy.reason)];
+        return;
+    }
+
+    const auto jitStatus = Core::JIT::QueryExternalJitStatus();
+    if (!jitStatus.available) {
+        self.logLabel.text = @"Status: blocked. External JIT provider is not detected.";
+        [self showAlertWithTitle:@"External JIT required"
+                         message:@"The iOS port can select a game now, but emulation cannot start until an external JIT provider is attached."];
+        return;
+    }
+
+    self.logLabel.text = @"Status: runtime ready, emulator core is not linked into the iOS target yet.";
+    [self showAlertWithTitle:@"Core not linked yet"
+                     message:@"Device, game path, resolution, and JIT checks passed. The next porting step is linking the shadPS4 emulator core into this iOS app target."];
+}
+
+- (void)showSettingsSummary {
+    [self showAlertWithTitle:@"Settings"
+                     message:@"Current mobile settings are fixed to 720p or 900p. Additional settings will be enabled as emulator subsystems are linked."];
+}
+
+- (void)showLogsSummary {
+    [self showAlertWithTitle:@"Logs" message:self.logLabel.text ?: @"No log entries yet."];
+}
+
+- (void)showAlertWithTitle:(NSString*)title message:(NSString*)message {
+    UIAlertController* alert = [UIAlertController alertControllerWithTitle:title
+                                                                   message:message
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+@end
+
+@interface ShadPS4SmokeAppDelegate : UIResponder <UIApplicationDelegate>
+@property(strong, nonatomic) UIWindow* window;
+@end
+
+@implementation ShadPS4SmokeAppDelegate
+
+- (BOOL)application:(UIApplication*)application
+    didFinishLaunchingWithOptions:(NSDictionary*)launchOptions {
+    (void)application;
+    (void)launchOptions;
+
+    self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
+    self.window.rootViewController = [[ShadPS4ViewController alloc] init];
     [self.window makeKeyAndVisible];
     return YES;
 }

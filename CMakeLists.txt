@@ -252,6 +252,7 @@ if(SHADPS4_IOS_PORT AND SHADPS4_IOS_BUILD_SMOKE_APP)
         "-framework CoreGraphics"
         "-framework Foundation"
         "-framework UIKit"
+        "-framework UniformTypeIdentifiers"
     )
     set_target_properties(shadps4-ios-smoke PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/ios_smoke/Info.plist.in"
